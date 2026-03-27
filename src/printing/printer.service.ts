@@ -6,13 +6,17 @@ export class PrinterService {
 	private readonly scriptPath: string;
 
 	constructor(pythonScriptPath?: string) {
-		this.scriptPath = pythonScriptPath ?? path.join(__dirname, "print_ticket.py");
+		const defaultScriptPath = path.join(__dirname, "print_ticket.py");
+		this.scriptPath =
+			process.env.PRINT_SCRIPT_PATH ?? pythonScriptPath ?? defaultScriptPath;
 	}
 
 	async printTicket(data: PrintableTicketData): Promise<any> {
 		return new Promise((resolve, reject) => {
 			const payload = JSON.stringify(data);
-			const child = spawn("python3", [this.scriptPath, payload]);
+			const defaultPythonCommand = process.platform === "win32" ? "python" : "python3";
+			const pythonCommand = process.env.PYTHON_CMD || defaultPythonCommand;
+			const child = spawn(pythonCommand, [this.scriptPath, payload]);
 
 			let stdout = "";
 			let stderr = "";
