@@ -10,7 +10,8 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "moduleResolution": "node",
-    "types": ["node"]
+    "types": ["node"],
+		"jsx": "react-jsx"
   },
   "include": ["src"],
   "exclude": ["node_modules"]

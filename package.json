@@ -20,15 +20,21 @@
   "homepage": "https://github.com/vinzgeorno/CTU-Kiosk-System#readme",
   "description": "",
   "dependencies": {
+    "@fastify/cors": "^11.2.0",
     "better-sqlite3": "^12.8.0",
     "dotenv": "^17.3.1",
     "fastify": "^5.8.4",
-    "mqtt": "^5.15.1"
+    "mqtt": "^5.15.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "ts-node": "^10.9.2",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "vite": "^8.0.3"
   }
 }

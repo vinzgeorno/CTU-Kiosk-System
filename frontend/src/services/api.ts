@@ -1,7 +1,14 @@
 export const API_BASE_URL = "http://localhost:3000";
 
 async function requestJson(path: string, init?: RequestInit) {
-	const response = await fetch(`${API_BASE_URL}${path}`, init);
+	let response: Response;
+
+	try {
+		response = await fetch(`${API_BASE_URL}${path}`, init);
+	} catch {
+		throw new Error(`Unable to reach backend at ${API_BASE_URL}`);
+	}
+
 	const data = await response.json().catch(() => null);
 
 	if (!response.ok) {
