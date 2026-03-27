@@ -70,4 +70,48 @@ export class TransactionRepository {
 
 		return execute(record);
 	}
+
+	getRecentTransactions(limit: number = 20) {
+		const statement = this.database.prepare(
+			`
+				SELECT *
+				FROM transactions
+				ORDER BY id DESC
+				LIMIT ?
+			`
+		);
+
+		return statement.all(limit);
+	}
+
+	getTransactionById(id: number) {
+		const transactionStatement = this.database.prepare(
+			`
+				SELECT *
+				FROM transactions
+				WHERE id = ?
+				LIMIT 1
+			`
+		);
+
+		const transactionRow = transactionStatement.get(id) as Record<string, unknown> | undefined;
+		if (!transactionRow) {
+			return null;
+		}
+
+		const breakdownStatement = this.database.prepare(
+			`
+				SELECT *
+				FROM transaction_breakdown
+				WHERE transaction_id = ?
+			`
+		);
+
+		const breakdown = breakdownStatement.all(id) as Record<string, unknown>[];
+
+		return {
+			...transactionRow,
+			breakdown,
+		};
+	}
 }
