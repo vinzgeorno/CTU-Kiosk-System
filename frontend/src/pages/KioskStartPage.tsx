@@ -26,6 +26,8 @@ type PaymentSessionView = {
 type CompletionResult = {
 	ticketLabel: string;
 	transactionId: string;
+	amountDue: number;
+	amountPaid: number;
 };
 
 const asRecord = (value: unknown): Record<string, unknown> | null => {
@@ -71,9 +73,9 @@ const extractDataRecord = (value: unknown) => {
 export default function KioskStartPage() {
 	const [selection, setSelection] = useState<KioskSelectionState>(initialState);
 	const [session, setSession] = useState<PaymentSessionView | null>(null);
-	const [isOfflineSession, setIsOfflineSession] = useState(false);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
-	const [completion, setCompletion] = useState<CompletionResult | null>(null);
+	const [completedTransaction, setCompletedTransaction] = useState<CompletionResult | null>(null);
+	const [isPaymentActionLoading, setIsPaymentActionLoading] = useState(false);
 	const [isStarting, setIsStarting] = useState(false);
 	const [isInserting, setIsInserting] = useState<number | null>(null);
 	const [isCompleting, setIsCompleting] = useState(false);
@@ -137,9 +139,6 @@ export default function KioskStartPage() {
 			.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
 			.join(" ");
 
-	const isNetworkError = (error: unknown) =>
-		error instanceof TypeError && error.message.toLowerCase().includes("fetch");
-
 	const mapSessionView = (
 		payload: unknown,
 		fallbackFacilityName: string,
@@ -184,7 +183,7 @@ export default function KioskStartPage() {
 
 		setIsStarting(true);
 		setErrorMessage(null);
-		setCompletion(null);
+		setCompletedTransaction(null);
 
 		try {
 			const startPayload = {
@@ -196,22 +195,8 @@ export default function KioskStartPage() {
 			const currentResult = await getCurrentPaymentSession().catch(() => startResult);
 
 			setSession(mapSessionView(currentResult, selectedFacility.name, totalAmount, totalUnits));
-			setIsOfflineSession(false);
 		} catch (error) {
-			if (isNetworkError(error)) {
-				setSession({
-					facilityName: selectedFacility.name,
-					amountDue: totalAmount,
-					amountInserted: 0,
-					remainingAmount: totalAmount,
-					totalUnits,
-					status: "pending",
-				});
-				setIsOfflineSession(true);
-				setErrorMessage("Backend is unreachable. Running in temporary local test mode.");
-			} else {
-				setErrorMessage(error instanceof Error ? error.message : "Failed to start payment session");
-			}
+			setErrorMessage(error instanceof Error ? error.message : "Failed to start payment session");
 		} finally {
 			setIsStarting(false);
 		}
@@ -227,36 +212,17 @@ export default function KioskStartPage() {
 			return;
 		}
 
+		setIsPaymentActionLoading(true);
 		setIsInserting(amount);
 		setErrorMessage(null);
 
 		try {
 			await insertPaymentAmount(amount);
 			await refreshCurrentSession(session);
-			setIsOfflineSession(false);
 		} catch (error) {
-			if (isNetworkError(error)) {
-				setSession((prev) => {
-					if (!prev) {
-						return prev;
-					}
-
-					const amountInserted = prev.amountInserted + amount;
-					const remainingAmount = Math.max(0, prev.amountDue - amountInserted);
-
-					return {
-						...prev,
-						amountInserted,
-						remainingAmount,
-						status: remainingAmount <= 0 ? "paid" : "pending",
-					};
-				});
-				setIsOfflineSession(true);
-				setErrorMessage("Backend is unreachable. Amount updated in local test mode.");
-			} else {
-				setErrorMessage(error instanceof Error ? error.message : "Failed to insert payment amount");
-			}
+			setErrorMessage(error instanceof Error ? error.message : "Failed to insert payment amount");
 		} finally {
+			setIsPaymentActionLoading(false);
 			setIsInserting(null);
 		}
 	};
@@ -266,6 +232,7 @@ export default function KioskStartPage() {
 			return;
 		}
 
+		setIsPaymentActionLoading(true);
 		setIsCompleting(true);
 		setErrorMessage(null);
 
@@ -273,41 +240,31 @@ export default function KioskStartPage() {
 			const result = await completePaymentSession();
 			const record = extractDataRecord(result);
 
-			setCompletion({
+			setCompletedTransaction({
 				ticketLabel: record ? getString(record, ["ticketLabel", "ticket_label", "label"], "N/A") : "N/A",
 				transactionId: record
 					? getString(record, ["transactionId", "transaction_id", "id"], "N/A")
 					: "N/A",
+				amountDue: record ? getNumber(record, ["amountDue", "amount_due"], session.amountDue) : session.amountDue,
+				amountPaid: record
+					? getNumber(record, ["amountPaid", "amount_paid"], session.amountInserted)
+					: session.amountInserted,
 			});
 
-			await refreshCurrentSession(session);
-			setIsOfflineSession(false);
+			setSession(null);
 		} catch (error) {
-			if (isNetworkError(error) && isOfflineSession) {
-				const localTransactionId = `LOCAL-${Date.now()}`;
-				setCompletion({
-					ticketLabel: "LOCAL TEST TICKET",
-					transactionId: localTransactionId,
-				});
-				setSession((prev) => (prev ? { ...prev, status: "completed", remainingAmount: 0 } : prev));
-				setErrorMessage("Backend is unreachable. Completion simulated in local test mode.");
-			} else {
-				setErrorMessage(error instanceof Error ? error.message : "Failed to complete payment session");
-			}
+			setErrorMessage(error instanceof Error ? error.message : "Failed to complete payment session");
 		} finally {
+			setIsPaymentActionLoading(false);
 			setIsCompleting(false);
 		}
 	};
 
 	const handleCancelSession = () => {
-		setSelection(initialState);
 		setSession(null);
-		setCompletion(null);
+		setCompletedTransaction(null);
 		setErrorMessage(null);
-		setIsOfflineSession(false);
-		setIsStarting(false);
-		setIsInserting(null);
-		setIsCompleting(false);
+		setIsPaymentActionLoading(false);
 	};
 
 	return (
@@ -501,20 +458,6 @@ export default function KioskStartPage() {
 					}}
 				>
 					<h2 style={{ margin: 0 }}>Payment Session</h2>
-					{isOfflineSession ? (
-						<div
-							style={{
-								padding: "8px 10px",
-								borderRadius: "6px",
-								background: "#fffbeb",
-								border: "1px solid #fde68a",
-								color: "#92400e",
-								fontSize: "13px",
-							}}
-						>
-							Local test mode: backend calls are unavailable, so payment updates are simulated.
-						</div>
-					) : null}
 
 					<div style={{ display: "flex", justifyContent: "space-between" }}>
 						<span>Facility</span>
@@ -545,13 +488,13 @@ export default function KioskStartPage() {
 						<button
 							type="button"
 							onClick={() => handleInsertAmount(10)}
-							disabled={isInserting !== null || isCompleting}
+							disabled={isPaymentActionLoading}
 							style={{
 								padding: "10px 12px",
 								borderRadius: "6px",
 								border: "1px solid #cbd5e1",
 								background: "#ffffff",
-								cursor: isInserting !== null || isCompleting ? "not-allowed" : "pointer",
+								cursor: isPaymentActionLoading ? "not-allowed" : "pointer",
 							}}
 						>
 							{isInserting === 10 ? "Inserting..." : "Insert 10"}
@@ -559,13 +502,13 @@ export default function KioskStartPage() {
 						<button
 							type="button"
 							onClick={() => handleInsertAmount(20)}
-							disabled={isInserting !== null || isCompleting}
+							disabled={isPaymentActionLoading}
 							style={{
 								padding: "10px 12px",
 								borderRadius: "6px",
 								border: "1px solid #cbd5e1",
 								background: "#ffffff",
-								cursor: isInserting !== null || isCompleting ? "not-allowed" : "pointer",
+								cursor: isPaymentActionLoading ? "not-allowed" : "pointer",
 							}}
 						>
 							{isInserting === 20 ? "Inserting..." : "Insert 20"}
@@ -573,13 +516,13 @@ export default function KioskStartPage() {
 						<button
 							type="button"
 							onClick={() => handleInsertAmount(50)}
-							disabled={isInserting !== null || isCompleting}
+							disabled={isPaymentActionLoading}
 							style={{
 								padding: "10px 12px",
 								borderRadius: "6px",
 								border: "1px solid #cbd5e1",
 								background: "#ffffff",
-								cursor: isInserting !== null || isCompleting ? "not-allowed" : "pointer",
+								cursor: isPaymentActionLoading ? "not-allowed" : "pointer",
 							}}
 						>
 							{isInserting === 50 ? "Inserting..." : "Insert 50"}
@@ -590,14 +533,14 @@ export default function KioskStartPage() {
 						<button
 							type="button"
 							onClick={handleCompletePayment}
-							disabled={!canComplete || isCompleting || isInserting !== null}
+							disabled={!canComplete || isPaymentActionLoading}
 							style={{
 								padding: "10px 14px",
 								borderRadius: "6px",
 								border: "none",
 								background: canComplete ? "#0f766e" : "#cbd5e1",
 								color: canComplete ? "#ffffff" : "#334155",
-								cursor: canComplete && !isCompleting && isInserting === null ? "pointer" : "not-allowed",
+								cursor: canComplete && !isPaymentActionLoading ? "pointer" : "not-allowed",
 								fontWeight: 600,
 							}}
 						>
@@ -607,37 +550,60 @@ export default function KioskStartPage() {
 						<button
 							type="button"
 							onClick={handleCancelSession}
-							disabled={isCompleting || isInserting !== null}
+							disabled={isPaymentActionLoading}
 							style={{
 								padding: "10px 14px",
 								borderRadius: "6px",
 								border: "1px solid #cbd5e1",
 								background: "#ffffff",
-								cursor: isCompleting || isInserting !== null ? "not-allowed" : "pointer",
+								cursor: isPaymentActionLoading ? "not-allowed" : "pointer",
 							}}
 						>
 							Cancel Session
 						</button>
 					</div>
+				</section>
+			) : null}
 
-					{completion ? (
-						<div
+			{completedTransaction ? (
+				<section
+					style={{
+						border: "1px solid #bbf7d0",
+						borderRadius: "10px",
+						padding: "16px",
+						background: "#f0fdf4",
+						display: "grid",
+						gap: "8px",
+					}}
+				>
+					<h2 style={{ margin: 0 }}>Payment Completed</h2>
+					<div>
+						<strong>Transaction ID:</strong> {completedTransaction.transactionId}
+					</div>
+					<div>
+						<strong>Ticket Label:</strong> {completedTransaction.ticketLabel}
+					</div>
+					<div>
+						<strong>Amount Due:</strong> PHP {completedTransaction.amountDue.toFixed(2)}
+					</div>
+					<div>
+						<strong>Amount Paid:</strong> PHP {completedTransaction.amountPaid.toFixed(2)}
+					</div>
+					<div style={{ marginTop: "8px" }}>
+						<button
+							type="button"
+							onClick={handleCancelSession}
 							style={{
-								marginTop: "8px",
-								padding: "10px",
-								borderRadius: "8px",
-								border: "1px solid #bbf7d0",
-								background: "#f0fdf4",
+								padding: "10px 14px",
+								borderRadius: "6px",
+								border: "1px solid #cbd5e1",
+								background: "#ffffff",
+								cursor: "pointer",
 							}}
 						>
-							<div>
-								<strong>Ticket Label:</strong> {completion.ticketLabel}
-							</div>
-							<div>
-								<strong>Transaction ID:</strong> {completion.transactionId}
-							</div>
-						</div>
-					) : null}
+							Cancel Session
+						</button>
+					</div>
 				</section>
 			) : null}
 		</div>
