@@ -285,336 +285,416 @@ export default function KioskStartPage() {
 	return (
 		<div
 			style={{
-				maxWidth: "920px",
-				margin: "0 auto",
-				padding: "28px",
-				display: "grid",
-				gap: "18px",
+				width: "100vw",
+				height: "100vh",
+				overflow: "hidden",
+				padding: "12px",
+				boxSizing: "border-box",
+				display: "flex",
+				flexDirection: "column",
+				gap: "10px",
+				background: "#f5f8fb",
 				fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
-				alignItems: "start",
 			}}
 		>
-			<h1 style={{ margin: 0, textAlign: "center", fontSize: "28px" }}>CTU Kiosk Ticketing</h1>
-			<p style={{ margin: 0, textAlign: "center", color: "#475569", fontSize: "14px" }}>Quickly purchase tickets — tap selections, insert test payments, then complete.</p>
-
-			{/* Facility Selection */}
-			<section style={{ borderRadius: 12, padding: 16, background: "#ffffff", boxShadow: "0 1px 3px rgba(2,6,23,0.06)", border: "1px solid #e6eef0" }}>
-				<h2 style={{ margin: 0, fontSize: 18 }}>Facility</h2>
-				<div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
-					{facilities.map((facility) => {
-						const isSelected = selection.facilityCode === facility.code;
-
-						return (
-							<button
-								key={facility.code}
-								type="button"
-								onClick={() => handleSelectFacility(facility.code)}
-								style={{
-									padding: "18px",
-									borderRadius: 12,
-									border: isSelected ? "2px solid #0369a1" : "1px solid #cbd5e1",
-									background: isSelected ? "#e0f2fe" : "#ffffff",
-									cursor: "pointer",
-									textAlign: "left",
-									minHeight: 72,
-									display: "flex",
-									flexDirection: "column",
-									justifyContent: "center",
-								}}
-							>
-								<div style={{ fontWeight: 700, fontSize: 16 }}>{facility.name}</div>
-								<div style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>{facility.code}</div>
-							</button>
-						);
-					})}
+			<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+				<div>
+					<h1 style={{ margin: 0, fontSize: "24px", lineHeight: 1.1 }}>CTU Kiosk Ticketing</h1>
+					<div style={{ marginTop: 2, color: "#475569", fontSize: "13px" }}>Tap selections, insert payment, and complete.</div>
 				</div>
-			</section>
-
-			{/* Categories */}
-			<section style={{ borderRadius: 12, padding: 16, background: "#ffffff", boxShadow: "0 1px 3px rgba(2,6,23,0.06)", border: "1px solid #e6eef0" }}>
-				<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-					<h2 style={{ margin: 0, fontSize: 18 }}>Categories</h2>
-					<button
-						type="button"
-						onClick={handleClear}
-						disabled={!selectedFacility}
-						style={{
-							padding: "10px 14px",
-							borderRadius: 10,
-							border: "1px solid #cbd5e1",
-							background: "#ffffff",
-							cursor: selectedFacility ? "pointer" : "not-allowed",
-							fontWeight: 600,
-						}}
-					>
-						Clear
-					</button>
-				</div>
-
-				{!selectedFacility ? (
-					<p style={{ marginTop: 12, color: "#64748b" }}>Choose a facility to show available categories.</p>
-				) : (
-					<div style={{ marginTop: 12, display: "grid", gap: 12 }}>
-						{selectedFacility.categories.map((category) => {
-							const quantity = selection.quantities[category.code] ?? 0;
-
-							return (
-								<div
-									key={category.code}
-									style={{
-										display: "flex",
-										alignItems: "center",
-										gap: 12,
-										padding: 12,
-										borderRadius: 12,
-										border: "1px solid #eef2f7",
-										background: "#fff",
-									}}
-								>
-									<div style={{ flex: 1 }}>
-										<div style={{ fontWeight: 700, fontSize: 16 }}>{formatCategoryLabel(category.code)}</div>
-										<div style={{ fontSize: 13, color: "#64748b", marginTop: 6 }}>PHP {category.price.toFixed(2)} each</div>
-									</div>
-
-									<div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-										<button
-											type="button"
-											onClick={() => handleChangeQuantity(category.code, -1)}
-											aria-label={`Decrease ${category.code}`}
-											style={{
-												width: 56,
-												height: 56,
-												borderRadius: 12,
-												border: "1px solid #cbd5e1",
-												background: "#fff",
-												fontSize: 24,
-												cursor: "pointer",
-												display: "flex",
-												alignItems: "center",
-												justifyContent: "center",
-											}}
-										>
-											−
-										</button>
-
-										<div style={{ minWidth: 52, textAlign: "center", fontWeight: 700, fontSize: 20 }}>{quantity}</div>
-
-										<button
-											type="button"
-											onClick={() => handleChangeQuantity(category.code, 1)}
-											aria-label={`Increase ${category.code}`}
-											style={{
-												width: 56,
-												height: 56,
-												borderRadius: 12,
-												border: "1px solid #0369a1",
-												background: "#0369a1",
-												color: "#ffffff",
-												fontSize: 22,
-												cursor: "pointer",
-												display: "flex",
-												alignItems: "center",
-												justifyContent: "center",
-											}}
-										>
-											+
-										</button>
-									</div>
-								</div>
-							);
-						})}
-					</div>
-				)}
-			</section>
-
-			{/* Summary & Proceed */}
-			<section style={{ borderRadius: 12, padding: 16, background: "#ffffff", boxShadow: "0 1px 3px rgba(2,6,23,0.06)", border: "1px solid #e6eef0", display: "flex", flexDirection: "column", gap: 12 }}>
-				<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-					<div>
-						<div style={{ fontSize: 12, color: "#64748b" }}>Total Units</div>
-						<div style={{ fontWeight: 800, fontSize: 20 }}>{totalUnits}</div>
-					</div>
-
-					<div style={{ textAlign: "right" }}>
-						<div style={{ fontSize: 12, color: "#64748b" }}>Total Amount</div>
-						<div style={{ fontWeight: 900, fontSize: 24, color: "#0f766e" }}>PHP {totalAmount.toFixed(2)}</div>
-					</div>
-				</div>
-
-				<div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 6 }}>
-					<button
-						type="button"
-						onClick={handleStartSession}
-						disabled={!canProceed}
-						style={{
-							padding: "16px 28px",
-							borderRadius: 12,
-							border: "none",
-							background: canProceed ? "#0369a1" : "#cbd5e1",
-							color: canProceed ? "#ffffff" : "#334155",
-							cursor: canProceed ? "pointer" : "not-allowed",
-							fontWeight: 800,
-							fontSize: 16,
-							minWidth: 220,
-						}}
-					>
-						{isStarting ? "Starting..." : "Proceed"}
-					</button>
-				</div>
-			</section>
-
-			{errorMessage ? (
-				<section style={{ borderRadius: 12, padding: 12, background: "#fff7f7", border: "1px solid #fecaca", color: "#991b1b" }}>
-					{errorMessage}
-				</section>
-			) : null}
-
-			{/* Payment Panel */}
-			{session ? (
-				<section style={{ borderRadius: 12, padding: 16, background: "#ffffff", boxShadow: "0 1px 3px rgba(2,6,23,0.06)", border: "1px solid #e6eef0" }}>
-					<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-						<h2 style={{ margin: 0, fontSize: 18 }}>Payment</h2>
-						<div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-							<div style={{ fontSize: 12, color: "#64748b" }}>{session.facilityName}</div>
-							<div style={{ padding: "6px 10px", borderRadius: 999, background: session.status.toLowerCase() === "paid" ? "#dcfce7" : "#eef2ff", color: session.status.toLowerCase() === "paid" ? "#166534" : "#3730a3", fontWeight: 700, fontSize: 12 }}>{session.status.toUpperCase()}</div>
-						</div>
-					</div>
-
-					<div style={{ display: "flex", gap: 12, marginTop: 12, alignItems: "center" }}>
-						<div style={{ flex: 1, padding: 12, borderRadius: 10, background: "#fafafa", border: "1px solid #eef2f7" }}>
-							<div style={{ fontSize: 12, color: "#64748b" }}>Amount Due</div>
-							<div style={{ fontWeight: 900, fontSize: 28, color: "#0f766e" }}>PHP {session.amountDue.toFixed(2)}</div>
-						</div>
-
-						<div style={{ flex: 1, padding: 12, borderRadius: 10, background: "#fff7ed", border: "1px solid #ffedd5" }}>
-							<div style={{ fontSize: 12, color: "#92400e" }}>Inserted</div>
-							<div style={{ fontWeight: 900, fontSize: 28, color: "#b45309" }}>PHP {session.amountInserted.toFixed(2)}</div>
-						</div>
-
-						<div style={{ flex: 1, padding: 12, borderRadius: 10, background: "#fffaf0", border: "1px solid #fef3c7" }}>
-							<div style={{ fontSize: 12, color: "#92400e" }}>Remaining</div>
-							<div style={{ fontWeight: 900, fontSize: 28, color: "#b45309" }}>PHP {session.remainingAmount.toFixed(2)}</div>
-						</div>
-					</div>
-
-					<div style={{ marginTop: 14, display: "flex", gap: 12, flexWrap: "wrap" }}>
-						{[10, 20, 50].map((amt) => (
-							<button
-								key={amt}
-								type="button"
-								onClick={() => handleInsertAmount(amt)}
-								disabled={isPaymentActionLoading}
-								style={{
-									padding: "14px 18px",
-									borderRadius: 12,
-									border: "1px solid #cbd5e1",
-									background: "#ffffff",
-									cursor: isPaymentActionLoading ? "not-allowed" : "pointer",
-									fontWeight: 800,
-									minWidth: 140,
-									fontSize: 16,
-								}}
-							>
-								{isInserting === amt ? `Inserting ${amt}...` : `Insert ${amt}`}
-							</button>
-						))}
-					</div>
-
-					<div style={{ marginTop: 14, display: "flex", gap: 12 }}>
-						<button
-							type="button"
-							onClick={handleCompletePayment}
-							disabled={!canComplete || isPaymentActionLoading}
-							style={{
-								padding: "14px 20px",
-								borderRadius: 12,
-								border: "none",
-								background: canComplete ? "#059669" : "#cbd5e1",
-								color: canComplete ? "#ffffff" : "#334155",
-								cursor: canComplete && !isPaymentActionLoading ? "pointer" : "not-allowed",
-								fontWeight: 900,
-								fontSize: 16,
-								minWidth: 220,
-							}}
-						>
-							{isCompleting ? "Completing..." : "Complete Payment"}
-						</button>
-
-						<button
-							type="button"
-							onClick={handleCancelSession}
-							disabled={isPaymentActionLoading}
-							style={{
-								padding: "12px 16px",
-								borderRadius: 12,
-								border: "1px solid #cbd5e1",
-								background: "#ffffff",
-								cursor: isPaymentActionLoading ? "not-allowed" : "pointer",
-								fontWeight: 700,
-							}}
-						>
-							Cancel
-						</button>
-					</div>
-				</section>
-			) : null}
-
-			{/* New Transaction button */}
-			{showNewTransactionButton ? (
-				<div style={{ display: "flex", justifyContent: "center" }}>
+				{showNewTransactionButton ? (
 					<button
 						type="button"
 						onClick={resetAll}
 						style={{
-							padding: "14px 22px",
-							borderRadius: 12,
+							padding: "12px 18px",
+							borderRadius: 10,
 							border: "none",
 							background: "#0b63b2",
 							color: "#fff",
 							cursor: "pointer",
-							fontWeight: 900,
-							fontSize: 16,
-							minWidth: 240,
+							fontWeight: 800,
+							fontSize: 15,
+							minWidth: 190,
+							height: 48,
 						}}
 					>
 						New Transaction
 					</button>
-				</div>
-			) : null}
+				) : null}
+			</div>
 
-			{/* Completed result */}
-			{completedTransaction ? (
-				<section style={{ borderRadius: 12, padding: 16, background: "#ecfdf5", border: "1px solid #bbf7d0", display: "grid", gap: 8 }}>
-					<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-						<div>
-							<div style={{ fontSize: 12, color: "#065f46" }}>Payment Completed</div>
-							<div style={{ fontWeight: 900, fontSize: 20, color: "#065f46" }}>{completedTransaction.ticketLabel}</div>
-						</div>
-						<div style={{ fontWeight: 800, fontSize: 14, color: "#065f46" }}>ID: {completedTransaction.transactionId}</div>
-					</div>
-
-					<div style={{ display: "flex", gap: 12 }}>
-						<div style={{ flex: 1, padding: 12, borderRadius: 10, background: "#fff", border: "1px solid #e6eef0" }}>
-							<div style={{ fontSize: 12, color: "#64748b" }}>Amount Due</div>
-							<div style={{ fontWeight: 800, fontSize: 18 }}>PHP {completedTransaction.amountDue.toFixed(2)}</div>
-						</div>
-						<div style={{ flex: 1, padding: 12, borderRadius: 10, background: "#fff", border: "1px solid #e6eef0" }}>
-							<div style={{ fontSize: 12, color: "#64748b" }}>Amount Paid</div>
-							<div style={{ fontWeight: 800, fontSize: 18 }}>PHP {completedTransaction.amountPaid.toFixed(2)}</div>
-						</div>
-					</div>
-
-					<div style={{ display: "flex", justifyContent: "center", marginTop: 6 }}>
-						<button
-							type="button"
-							onClick={resetAll}
-							style={{ padding: "12px 16px", borderRadius: 12, border: "none", background: "#0369a1", color: "#fff", fontWeight: 800, minWidth: 220 }}
-						>
-							New Transaction
-						</button>
-					</div>
+			{errorMessage ? (
+				<section
+					style={{
+						borderRadius: 10,
+						padding: "9px 12px",
+						background: "#fff7f7",
+						border: "1px solid #fecaca",
+						color: "#991b1b",
+						fontSize: 13,
+						flexShrink: 0,
+					}}
+				>
+					{errorMessage}
 				</section>
 			) : null}
+
+			<div style={{ flex: 1, minHeight: 0, display: "flex", gap: 10, overflow: "hidden" }}>
+				<div style={{ flex: "0 0 58%", minWidth: 0, display: "flex", flexDirection: "column", gap: 10, overflow: "hidden" }}>
+					<section
+						style={{
+							borderRadius: 12,
+							padding: 12,
+							background: "#ffffff",
+							border: "1px solid #e6eef0",
+							flexShrink: 0,
+						}}
+					>
+						<h2 style={{ margin: 0, fontSize: 16 }}>Facility</h2>
+						<div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+							{facilities.map((facility) => {
+								const isSelected = selection.facilityCode === facility.code;
+
+								return (
+									<button
+										key={facility.code}
+										type="button"
+										onClick={() => handleSelectFacility(facility.code)}
+										style={{
+											padding: "12px",
+											borderRadius: 10,
+											border: isSelected ? "2px solid #0369a1" : "1px solid #cbd5e1",
+											background: isSelected ? "#e0f2fe" : "#ffffff",
+											cursor: "pointer",
+											textAlign: "left",
+											height: 74,
+											display: "flex",
+											flexDirection: "column",
+											justifyContent: "center",
+										}}
+									>
+										<div style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.2 }}>{facility.name}</div>
+										<div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>{facility.code}</div>
+									</button>
+								);
+							})}
+						</div>
+					</section>
+
+					<section
+						style={{
+							borderRadius: 12,
+							padding: 12,
+							background: "#ffffff",
+							border: "1px solid #e6eef0",
+							flex: 1,
+							minHeight: 0,
+							overflow: "hidden",
+							display: "flex",
+							flexDirection: "column",
+						}}
+					>
+						<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+							<h2 style={{ margin: 0, fontSize: 16 }}>Categories</h2>
+							<button
+								type="button"
+								onClick={handleClear}
+								disabled={!selectedFacility}
+								style={{
+									padding: "8px 12px",
+									borderRadius: 8,
+									border: "1px solid #cbd5e1",
+									background: "#ffffff",
+									cursor: selectedFacility ? "pointer" : "not-allowed",
+									fontWeight: 700,
+									fontSize: 13,
+									height: 36,
+								}}
+							>
+								Clear
+							</button>
+						</div>
+
+						{!selectedFacility ? (
+							<div style={{ marginTop: 10, color: "#64748b", fontSize: 13 }}>Choose a facility to show categories.</div>
+						) : (
+							<div style={{ marginTop: 8, display: "grid", gap: 8, flex: 1, minHeight: 0 }}>
+								{selectedFacility.categories.map((category) => {
+									const quantity = selection.quantities[category.code] ?? 0;
+
+									return (
+										<div
+											key={category.code}
+											style={{
+												display: "flex",
+												alignItems: "center",
+												gap: 8,
+												padding: "8px 10px",
+												borderRadius: 10,
+												border: "1px solid #eef2f7",
+												background: "#fff",
+												minHeight: 62,
+											}}
+										>
+											<div style={{ flex: 1, minWidth: 0 }}>
+												<div style={{ fontWeight: 700, fontSize: 15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formatCategoryLabel(category.code)}</div>
+												<div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>PHP {category.price.toFixed(2)} each</div>
+											</div>
+
+											<div style={{ display: "flex", gap: 7, alignItems: "center", flexShrink: 0 }}>
+												<button
+													type="button"
+													onClick={() => handleChangeQuantity(category.code, -1)}
+													aria-label={`Decrease ${category.code}`}
+													style={{
+														width: 44,
+														height: 44,
+														borderRadius: 10,
+														border: "1px solid #cbd5e1",
+														background: "#fff",
+														fontSize: 24,
+														cursor: "pointer",
+														display: "flex",
+														alignItems: "center",
+														justifyContent: "center",
+														lineHeight: 1,
+													}}
+												>
+													−
+												</button>
+
+												<div style={{ minWidth: 36, textAlign: "center", fontWeight: 800, fontSize: 20 }}>{quantity}</div>
+
+												<button
+													type="button"
+													onClick={() => handleChangeQuantity(category.code, 1)}
+													aria-label={`Increase ${category.code}`}
+													style={{
+														width: 44,
+														height: 44,
+														borderRadius: 10,
+														border: "1px solid #0369a1",
+														background: "#0369a1",
+														color: "#ffffff",
+														fontSize: 22,
+														cursor: "pointer",
+														display: "flex",
+														alignItems: "center",
+														justifyContent: "center",
+														lineHeight: 1,
+													}}
+												>
+													+
+												</button>
+											</div>
+										</div>
+									);
+								})}
+							</div>
+						)}
+					</section>
+				</div>
+
+				<div style={{ flex: "0 0 42%", minWidth: 0, display: "flex", flexDirection: "column", gap: 10, overflow: "hidden" }}>
+					<section
+						style={{
+							borderRadius: 12,
+							padding: 12,
+							background: "#ffffff",
+							border: "1px solid #e6eef0",
+							display: "grid",
+							gap: 10,
+							flexShrink: 0,
+						}}
+					>
+						<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+							<div>
+								<div style={{ fontSize: 11, color: "#64748b" }}>Total Units</div>
+								<div style={{ fontWeight: 800, fontSize: 20 }}>{totalUnits}</div>
+							</div>
+							<div style={{ textAlign: "right" }}>
+								<div style={{ fontSize: 11, color: "#64748b" }}>Total Amount</div>
+								<div style={{ fontWeight: 900, fontSize: 24, color: "#0f766e" }}>PHP {totalAmount.toFixed(2)}</div>
+							</div>
+						</div>
+
+						<button
+							type="button"
+							onClick={handleStartSession}
+							disabled={!canProceed}
+							style={{
+								height: 52,
+								padding: "10px 14px",
+								borderRadius: 10,
+								border: "none",
+								background: canProceed ? "#0369a1" : "#cbd5e1",
+								color: canProceed ? "#ffffff" : "#334155",
+								cursor: canProceed ? "pointer" : "not-allowed",
+								fontWeight: 800,
+								fontSize: 17,
+							}}
+						>
+							{isStarting ? "Starting..." : "Proceed"}
+						</button>
+					</section>
+
+					{completedTransaction ? (
+						<section
+							style={{
+								borderRadius: 12,
+								padding: 12,
+								background: "#ecfdf5",
+								border: "1px solid #bbf7d0",
+								display: "grid",
+								gap: 8,
+								flex: 1,
+								minHeight: 0,
+							}}
+						>
+							<div style={{ fontSize: 12, color: "#065f46", fontWeight: 700 }}>Payment Completed</div>
+							<div style={{ fontWeight: 900, fontSize: 20, color: "#065f46", lineHeight: 1.1 }}>{completedTransaction.ticketLabel}</div>
+							<div style={{ fontWeight: 700, fontSize: 13, color: "#065f46" }}>ID: {completedTransaction.transactionId}</div>
+
+							<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 2 }}>
+								<div style={{ padding: 10, borderRadius: 8, background: "#fff", border: "1px solid #e6eef0" }}>
+									<div style={{ fontSize: 11, color: "#64748b" }}>Amount Due</div>
+									<div style={{ fontWeight: 800, fontSize: 17 }}>PHP {completedTransaction.amountDue.toFixed(2)}</div>
+								</div>
+								<div style={{ padding: 10, borderRadius: 8, background: "#fff", border: "1px solid #e6eef0" }}>
+									<div style={{ fontSize: 11, color: "#64748b" }}>Amount Paid</div>
+									<div style={{ fontWeight: 800, fontSize: 17 }}>PHP {completedTransaction.amountPaid.toFixed(2)}</div>
+								</div>
+							</div>
+						</section>
+					) : session ? (
+						<section
+							style={{
+								borderRadius: 12,
+								padding: 12,
+								background: "#ffffff",
+								border: "1px solid #e6eef0",
+								display: "grid",
+								gap: 8,
+								flex: 1,
+								minHeight: 0,
+								overflow: "hidden",
+							}}
+						>
+							<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+								<h2 style={{ margin: 0, fontSize: 16 }}>Payment</h2>
+								<div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+									<div style={{ fontSize: 11, color: "#64748b", maxWidth: 110, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{session.facilityName}</div>
+									<div
+										style={{
+											padding: "4px 8px",
+											borderRadius: 999,
+											background: session.status.toLowerCase() === "paid" ? "#dcfce7" : "#eef2ff",
+											color: session.status.toLowerCase() === "paid" ? "#166534" : "#3730a3",
+											fontWeight: 700,
+											fontSize: 11,
+										}}
+									>
+										{session.status.toUpperCase()}
+									</div>
+								</div>
+							</div>
+
+							<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+								<div style={{ padding: "8px 7px", borderRadius: 8, background: "#fafafa", border: "1px solid #eef2f7" }}>
+									<div style={{ fontSize: 10, color: "#64748b" }}>Due</div>
+									<div style={{ fontWeight: 900, fontSize: 16, color: "#0f766e" }}>PHP {session.amountDue.toFixed(2)}</div>
+								</div>
+								<div style={{ padding: "8px 7px", borderRadius: 8, background: "#fff7ed", border: "1px solid #ffedd5" }}>
+									<div style={{ fontSize: 10, color: "#92400e" }}>Inserted</div>
+									<div style={{ fontWeight: 900, fontSize: 16, color: "#b45309" }}>PHP {session.amountInserted.toFixed(2)}</div>
+								</div>
+								<div style={{ padding: "8px 7px", borderRadius: 8, background: "#fffaf0", border: "1px solid #fef3c7" }}>
+									<div style={{ fontSize: 10, color: "#92400e" }}>Remaining</div>
+									<div style={{ fontWeight: 900, fontSize: 16, color: "#b45309" }}>PHP {session.remainingAmount.toFixed(2)}</div>
+								</div>
+							</div>
+
+							<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+								{[10, 20, 50].map((amt) => (
+									<button
+										key={amt}
+										type="button"
+										onClick={() => handleInsertAmount(amt)}
+										disabled={isPaymentActionLoading}
+										style={{
+											height: 46,
+											borderRadius: 10,
+											border: "1px solid #cbd5e1",
+											background: "#ffffff",
+											cursor: isPaymentActionLoading ? "not-allowed" : "pointer",
+											fontWeight: 800,
+											fontSize: 15,
+										}}
+									>
+										{isInserting === amt ? `Inserting ${amt}...` : `Insert ${amt}`}
+									</button>
+								))}
+							</div>
+
+							<div style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: 8 }}>
+								<button
+									type="button"
+									onClick={handleCompletePayment}
+									disabled={!canComplete || isPaymentActionLoading}
+									style={{
+										height: 50,
+										borderRadius: 10,
+										border: "none",
+										background: canComplete ? "#059669" : "#cbd5e1",
+										color: canComplete ? "#ffffff" : "#334155",
+										cursor: canComplete && !isPaymentActionLoading ? "pointer" : "not-allowed",
+										fontWeight: 900,
+										fontSize: 16,
+									}}
+								>
+									{isCompleting ? "Completing..." : "Complete Payment"}
+								</button>
+
+								<button
+									type="button"
+									onClick={handleCancelSession}
+									disabled={isPaymentActionLoading}
+									style={{
+										height: 50,
+										borderRadius: 10,
+										border: "1px solid #cbd5e1",
+										background: "#ffffff",
+										cursor: isPaymentActionLoading ? "not-allowed" : "pointer",
+										fontWeight: 700,
+										fontSize: 14,
+									}}
+								>
+									Cancel
+								</button>
+							</div>
+						</section>
+					) : (
+						<section
+							style={{
+								borderRadius: 12,
+								padding: 12,
+								background: "#ffffff",
+								border: "1px dashed #cbd5e1",
+								display: "flex",
+								alignItems: "center",
+								justifyContent: "center",
+								color: "#64748b",
+								fontSize: 13,
+								flex: 1,
+								minHeight: 0,
+							}}
+						>
+							Payment panel will appear after pressing Proceed.
+						</section>
+					)}
+				</div>
+			</div>
 		</div>
 	);
 }

@@ -1,5 +1,5 @@
-import AdminPage from "./pages/AdminPage";
+import KioskStartPage from "./pages/KioskStartPage";
 
 export default function App() {
-  return <AdminPage />;
+  return <KioskStartPage />;
 }

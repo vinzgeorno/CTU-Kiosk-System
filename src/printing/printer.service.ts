@@ -1,5 +1,6 @@
 import { spawn } from "child_process";
 import path from "path";
+import { env } from "../config/env";
 import { PrintableTicketData } from "./printer.types";
 
 export class PrinterService {
@@ -7,15 +8,15 @@ export class PrinterService {
 
 	constructor(pythonScriptPath?: string) {
 		const defaultScriptPath = path.join(__dirname, "print_ticket.py");
-		this.scriptPath =
-			process.env.PRINT_SCRIPT_PATH ?? pythonScriptPath ?? defaultScriptPath;
+		this.scriptPath = env.PRINT_SCRIPT_PATH
+			? env.PRINT_SCRIPT_PATH
+			: pythonScriptPath ?? defaultScriptPath;
 	}
 
 	async printTicket(data: PrintableTicketData): Promise<any> {
 		return new Promise((resolve, reject) => {
 			const payload = JSON.stringify(data);
-			const defaultPythonCommand = process.platform === "win32" ? "python" : "python3";
-			const pythonCommand = process.env.PYTHON_CMD || defaultPythonCommand;
+			const pythonCommand = env.PYTHON_CMD;
 			const child = spawn(pythonCommand, [this.scriptPath, payload]);
 
 			let stdout = "";

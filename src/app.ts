@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { MqttListenerService } from "./hardware/mqtt-listener.service";
+import { env } from "./config/env";
 import { PaymentSessionStore } from "./hardware/payment-session.store";
 import healthRoutes from "./routes/health.routes";
 import transactionRoutes from "./routes/transaction.routes";
@@ -11,9 +12,9 @@ const app = Fastify();
 const paymentSessionStore = new PaymentSessionStore();
 const applyPaymentEventService = new ApplyPaymentEventService(paymentSessionStore);
 
-const mqttBrokerUrl = process.env.MQTT_BROKER_URL ?? "mqtt://localhost:1883";
-const mqttPaymentTopic = process.env.MQTT_PAYMENT_TOPIC ?? "kiosk/payment";
-const mqttStatusTopic = process.env.MQTT_STATUS_TOPIC ?? "kiosk/status";
+const mqttBrokerUrl = env.MQTT_BROKER_URL;
+const mqttPaymentTopic = env.MQTT_PAYMENT_TOPIC;
+const mqttStatusTopic = env.MQTT_STATUS_TOPIC;
 
 const mqttListener = new MqttListenerService(
 	mqttBrokerUrl,
