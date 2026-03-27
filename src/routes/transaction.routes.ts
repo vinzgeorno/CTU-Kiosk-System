@@ -1,8 +1,10 @@
 import { db } from "../db/sqlite";
 import { TicketCounterRepository } from "../db/ticket-counter.repository";
 import { TransactionRepository } from "../db/transaction.repository";
+import { PaymentSessionStore } from "../hardware/payment-session.store";
 import { mapTransactionToPrintableTicketData } from "../printing/printer.mapper";
 import { PrinterService } from "../printing/printer.service";
+import { buildTransactionDetails } from "../services/transaction-builder.service";
 import { ProcessTransactionService } from "../services/process-transaction.service";
 import { TransactionRecordBuilderService } from "../services/transaction-record-builder.service";
 import { TransactionRecord } from "../types/transaction.types";
@@ -12,6 +14,15 @@ type CreateTransactionRequestBody = {
 	quantities: Record<string, number>;
 	amountPaid: number;
 	createdAt?: string;
+};
+
+type StartPaymentSessionRequestBody = {
+	facilityCode?: unknown;
+	quantities?: unknown;
+};
+
+type InsertPaymentRequestBody = {
+	amount?: unknown;
 };
 
 type RecentTransactionsQuery = {
@@ -64,10 +75,221 @@ export default async function transactionRoutes(fastify: any) {
 	);
 	const transactionRepository = new TransactionRepository(db);
 	const printerService = new PrinterService();
+	const paymentSessionStore = new PaymentSessionStore();
 	const processTransactionService = new ProcessTransactionService(
 		transactionRecordBuilderService,
 		transactionRepository,
 		printerService
+	);
+
+	fastify.post(
+		"/payment-session/start",
+		async (request: { body: StartPaymentSessionRequestBody }, reply: any) => {
+			const body = request.body;
+
+			if (!body || typeof body.facilityCode !== "string" || body.facilityCode.trim() === "") {
+				return reply.status(400).send({
+					success: false,
+					message: "facilityCode is required and must be a string.",
+				});
+			}
+
+			if (!body.quantities || typeof body.quantities !== "object" || Array.isArray(body.quantities)) {
+				return reply.status(400).send({
+					success: false,
+					message: "quantities is required and must be an object.",
+				});
+			}
+
+			const quantityEntries = Object.entries(body.quantities as Record<string, unknown>);
+
+			if (quantityEntries.length === 0) {
+				return reply.status(400).send({
+					success: false,
+					message: "quantities must contain at least one key.",
+				});
+			}
+
+			for (const [key, value] of quantityEntries) {
+				if (typeof value !== "number" || Number.isNaN(value)) {
+					return reply.status(400).send({
+						success: false,
+						message: `Quantity for '${key}' must be a number.`,
+					});
+				}
+
+				if (value < 0) {
+					return reply.status(400).send({
+						success: false,
+						message: `Quantity for '${key}' must be greater than or equal to 0.`,
+					});
+				}
+			}
+
+			try {
+				const transactionDetails = buildTransactionDetails({
+					facilityCode: body.facilityCode as any,
+					quantities: body.quantities as Record<string, number>,
+				});
+
+				const nowIso = new Date().toISOString();
+				const paymentSession = paymentSessionStore.create({
+					id: `${Date.now()}`,
+					facilityCode: transactionDetails.facilityCode,
+					facilityName: transactionDetails.facilityName,
+					breakdown: transactionDetails.breakdown,
+					totalUnits: transactionDetails.totalUnits,
+					amountDue: transactionDetails.amountDue,
+					amountInserted: 0,
+					status: "awaiting_payment",
+					createdAt: nowIso,
+					updatedAt: nowIso,
+				});
+
+				return {
+					success: true,
+					session: paymentSession,
+				};
+			} catch (error) {
+				return reply.status(500).send({
+					success: false,
+					message: error instanceof Error ? error.message : "Unknown error",
+				});
+			}
+		}
+	);
+
+	fastify.get(
+		"/payment-session/current",
+		async (_request: any, reply: any) => {
+			try {
+				const session = paymentSessionStore.getCurrent();
+				return {
+					success: true,
+					session,
+				};
+			} catch (error) {
+				return reply.status(500).send({
+					success: false,
+					message: error instanceof Error ? error.message : "Unknown error",
+				});
+			}
+		}
+	);
+
+	fastify.post(
+		"/payment-session/insert",
+		async (request: { body: InsertPaymentRequestBody }, reply: any) => {
+			const body = request.body;
+
+			if (!body || body.amount === undefined || body.amount === null) {
+				return reply.status(400).send({
+					success: false,
+					message: "amount is required.",
+				});
+			}
+
+			if (typeof body.amount !== "number" || Number.isNaN(body.amount)) {
+				return reply.status(400).send({
+					success: false,
+					message: "amount must be a number.",
+				});
+			}
+
+			if (body.amount <= 0) {
+				return reply.status(400).send({
+					success: false,
+					message: "amount must be greater than 0.",
+				});
+			}
+
+			try {
+				const currentSession = paymentSessionStore.getCurrent();
+
+				if (!currentSession) {
+					return reply.status(400).send({
+						success: false,
+						message: "No active payment session",
+					});
+				}
+
+				const newAmountInserted = currentSession.amountInserted + body.amount;
+				const nextStatus =
+					newAmountInserted >= currentSession.amountDue ? "paid" : "awaiting_payment";
+
+				const updatedSession = paymentSessionStore.update({
+					amountInserted: newAmountInserted,
+					status: nextStatus,
+				});
+
+				return {
+					success: true,
+					session: updatedSession,
+					remainingAmount: Math.max(
+						updatedSession.amountDue - updatedSession.amountInserted,
+						0
+					),
+				};
+			} catch (error) {
+				return reply.status(500).send({
+					success: false,
+					message: error instanceof Error ? error.message : "Unknown error",
+				});
+			}
+		}
+	);
+
+	fastify.post(
+		"/payment-session/complete",
+		async (_request: any, reply: any) => {
+			try {
+				const currentSession = paymentSessionStore.getCurrent();
+
+				if (!currentSession) {
+					return reply.status(400).send({
+						success: false,
+						message: "No active payment session",
+					});
+				}
+
+				if (currentSession.status !== "paid") {
+					return reply.status(400).send({
+						success: false,
+						message: "Payment session is not yet fully paid",
+					});
+				}
+
+				const quantities: Record<string, number> = {};
+				for (const item of currentSession.breakdown) {
+					quantities[item.categoryCode] = item.quantity;
+				}
+
+				const result = await processTransactionService.process({
+					facilityCode: currentSession.facilityCode as any,
+					quantities,
+					amountPaid: currentSession.amountInserted,
+					createdAt: currentSession.createdAt,
+				});
+
+				paymentSessionStore.update({ status: "completed" });
+				paymentSessionStore.clear();
+
+				return {
+					success: true,
+					transactionId: result.transactionId,
+					ticketLabel: result.record.ticketLabel,
+					totalUnits: result.record.totalUnits,
+					amountDue: result.record.amountDue,
+					amountPaid: result.record.amountPaid,
+					printResult: result.printResult,
+				};
+			} catch (error) {
+				return reply.status(500).send({
+					success: false,
+					message: error instanceof Error ? error.message : "Unknown error",
+				});
+			}
+		}
 	);
 
 	fastify.get(
