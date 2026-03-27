@@ -1,24 +1,17 @@
 {
-	"resource": "/home/ctukiosk/Desktop/Kiosk-System/CTU-Kiosk-System/tsconfig.json",
-	"owner": "typescript",
-	"severity": 8,
-	"message": "The root value of a 'tsconfig.json' file must be an object.",
-	"source": "ts",
-	"startLineNumber": 1,
-	"startColumn": 1,
-	"endLineNumber": 53,
-	"endColumn": 3,
-	"modelVersionId": 4,
-	"origin": "extHost1"
-},{
-	"resource": "/home/ctukiosk/Desktop/Kiosk-System/CTU-Kiosk-System/tsconfig.json",
-	"owner": "_generated_diagnostic_collection_name_#5",
-	"severity": 4,
-	"message": "Incorrect type. Expected \"object\".",
-	"startLineNumber": 1,
-	"startColumn": 1,
-	"endLineNumber": 53,
-	"endColumn": 3,
-	"modelVersionId": 4,
-	"origin": "extHost1"
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "commonjs",
+    "lib": ["es2020"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "node",
+    "types": ["node"]
+  },
+  "include": ["src"],
+  "exclude": ["node_modules"]
 }

@@ -1,5 +1,5 @@
-import { CategoryCode, FacilityCode, facilities } from "./src/config/facilities";
-import { TransactionBreakdownItem } from "./src/types/transaction.types";
+import { CategoryCode, FacilityCode, facilities } from "../config/facilities";
+import { TransactionBreakdownItem } from "../types/transaction.types";
 
 export type BuildTransactionInput = {
   facilityCode: FacilityCode;
