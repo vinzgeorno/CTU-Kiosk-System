@@ -267,22 +267,40 @@ export default function KioskStartPage() {
 		setIsPaymentActionLoading(false);
 	};
 
+	const resetAll = () => {
+		setSelection(initialState);
+		setSession(null);
+		setCompletedTransaction(null);
+		setErrorMessage(null);
+		setIsStarting(false);
+		setIsInserting(null);
+		setIsCompleting(false);
+		setIsPaymentActionLoading(false);
+	};
+
+	const showNewTransactionButton = Boolean(
+		completedTransaction || (session === null && (selection.facilityCode !== null || totalUnits > 0 || errorMessage !== null))
+	);
+
 	return (
 		<div
 			style={{
-				maxWidth: "960px",
+				maxWidth: "920px",
 				margin: "0 auto",
-				padding: "24px",
+				padding: "28px",
 				display: "grid",
-				gap: "20px",
+				gap: "18px",
 				fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+				alignItems: "start",
 			}}
 		>
-			<h1 style={{ margin: 0 }}>CTU Kiosk</h1>
+			<h1 style={{ margin: 0, textAlign: "center", fontSize: "28px" }}>CTU Kiosk Ticketing</h1>
+			<p style={{ margin: 0, textAlign: "center", color: "#475569", fontSize: "14px" }}>Quickly purchase tickets — tap selections, insert test payments, then complete.</p>
 
-			<section>
-				<h2 style={{ marginTop: 0 }}>Select Facility</h2>
-				<div style={{ display: "flex", flexWrap: "wrap", gap: "12px" }}>
+			{/* Facility Selection */}
+			<section style={{ borderRadius: 12, padding: 16, background: "#ffffff", boxShadow: "0 1px 3px rgba(2,6,23,0.06)", border: "1px solid #e6eef0" }}>
+				<h2 style={{ margin: 0, fontSize: 18 }}>Facility</h2>
+				<div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
 					{facilities.map((facility) => {
 						const isSelected = selection.facilityCode === facility.code;
 
@@ -292,43 +310,41 @@ export default function KioskStartPage() {
 								type="button"
 								onClick={() => handleSelectFacility(facility.code)}
 								style={{
-									padding: "12px 16px",
-									borderRadius: "8px",
-									border: isSelected ? "2px solid #0f766e" : "1px solid #cbd5e1",
-									background: isSelected ? "#ccfbf1" : "#ffffff",
+									padding: "18px",
+									borderRadius: 12,
+									border: isSelected ? "2px solid #0369a1" : "1px solid #cbd5e1",
+									background: isSelected ? "#e0f2fe" : "#ffffff",
 									cursor: "pointer",
-									minWidth: "180px",
 									textAlign: "left",
+									minHeight: 72,
+									display: "flex",
+									flexDirection: "column",
+									justifyContent: "center",
 								}}
 							>
-								<div style={{ fontWeight: 600 }}>{facility.name}</div>
-								<div style={{ fontSize: "12px", opacity: 0.8 }}>{facility.code}</div>
+								<div style={{ fontWeight: 700, fontSize: 16 }}>{facility.name}</div>
+								<div style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>{facility.code}</div>
 							</button>
 						);
 					})}
 				</div>
 			</section>
 
-			<section>
-				<div
-					style={{
-						display: "flex",
-						justifyContent: "space-between",
-						alignItems: "center",
-						marginBottom: "12px",
-					}}
-				>
-					<h2 style={{ margin: 0 }}>Categories</h2>
+			{/* Categories */}
+			<section style={{ borderRadius: 12, padding: 16, background: "#ffffff", boxShadow: "0 1px 3px rgba(2,6,23,0.06)", border: "1px solid #e6eef0" }}>
+				<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+					<h2 style={{ margin: 0, fontSize: 18 }}>Categories</h2>
 					<button
 						type="button"
 						onClick={handleClear}
 						disabled={!selectedFacility}
 						style={{
-							padding: "8px 12px",
-							borderRadius: "6px",
+							padding: "10px 14px",
+							borderRadius: 10,
 							border: "1px solid #cbd5e1",
 							background: "#ffffff",
 							cursor: selectedFacility ? "pointer" : "not-allowed",
+							fontWeight: 600,
 						}}
 					>
 						Clear
@@ -336,9 +352,9 @@ export default function KioskStartPage() {
 				</div>
 
 				{!selectedFacility ? (
-					<p style={{ margin: 0, color: "#64748b" }}>Please choose a facility to view categories.</p>
+					<p style={{ marginTop: 12, color: "#64748b" }}>Choose a facility to show available categories.</p>
 				) : (
-					<div style={{ display: "grid", gap: "10px" }}>
+					<div style={{ marginTop: 12, display: "grid", gap: 12 }}>
 						{selectedFacility.categories.map((category) => {
 							const quantity = selection.quantities[category.code] ?? 0;
 
@@ -346,51 +362,64 @@ export default function KioskStartPage() {
 								<div
 									key={category.code}
 									style={{
-										display: "grid",
-										gridTemplateColumns: "1fr auto auto auto",
+										display: "flex",
 										alignItems: "center",
-										gap: "10px",
-										padding: "12px",
-										border: "1px solid #e2e8f0",
-										borderRadius: "8px",
+										gap: 12,
+										padding: 12,
+										borderRadius: 12,
+										border: "1px solid #eef2f7",
+										background: "#fff",
 									}}
 								>
-									<div>
-										<div style={{ fontWeight: 600 }}>{formatCategoryLabel(category.code)}</div>
-										<div style={{ fontSize: "14px", color: "#475569" }}>PHP {category.price.toFixed(2)}</div>
+									<div style={{ flex: 1 }}>
+										<div style={{ fontWeight: 700, fontSize: 16 }}>{formatCategoryLabel(category.code)}</div>
+										<div style={{ fontSize: 13, color: "#64748b", marginTop: 6 }}>PHP {category.price.toFixed(2)} each</div>
 									</div>
 
-									<button
-										type="button"
-										onClick={() => handleChangeQuantity(category.code, -1)}
-										style={{
-											width: "36px",
-											height: "36px",
-											borderRadius: "6px",
-											border: "1px solid #cbd5e1",
-											background: "#ffffff",
-											cursor: "pointer",
-										}}
-									>
-										-
-									</button>
+									<div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+										<button
+											type="button"
+											onClick={() => handleChangeQuantity(category.code, -1)}
+											aria-label={`Decrease ${category.code}`}
+											style={{
+												width: 56,
+												height: 56,
+												borderRadius: 12,
+												border: "1px solid #cbd5e1",
+												background: "#fff",
+												fontSize: 24,
+												cursor: "pointer",
+												display: "flex",
+												alignItems: "center",
+												justifyContent: "center",
+											}}
+										>
+											−
+										</button>
 
-									<div style={{ minWidth: "24px", textAlign: "center", fontWeight: 600 }}>{quantity}</div>
+										<div style={{ minWidth: 52, textAlign: "center", fontWeight: 700, fontSize: 20 }}>{quantity}</div>
 
-									<button
-										type="button"
-										onClick={() => handleChangeQuantity(category.code, 1)}
-										style={{
-											width: "36px",
-											height: "36px",
-											borderRadius: "6px",
-											border: "1px solid #cbd5e1",
-											background: "#ffffff",
-											cursor: "pointer",
-										}}
-									>
-										+
-									</button>
+										<button
+											type="button"
+											onClick={() => handleChangeQuantity(category.code, 1)}
+											aria-label={`Increase ${category.code}`}
+											style={{
+												width: 56,
+												height: 56,
+												borderRadius: 12,
+												border: "1px solid #0369a1",
+												background: "#0369a1",
+												color: "#ffffff",
+												fontSize: 22,
+												cursor: "pointer",
+												display: "flex",
+												alignItems: "center",
+												justifyContent: "center",
+											}}
+										>
+											+
+										</button>
+									</div>
 								</div>
 							);
 						})}
@@ -398,150 +427,114 @@ export default function KioskStartPage() {
 				)}
 			</section>
 
-			<section
-				style={{
-					borderTop: "1px solid #e2e8f0",
-					paddingTop: "16px",
-					display: "grid",
-					gap: "12px",
-				}}
-			>
-				<div style={{ display: "flex", justifyContent: "space-between" }}>
-					<span>Total Units</span>
-					<strong>{totalUnits}</strong>
+			{/* Summary & Proceed */}
+			<section style={{ borderRadius: 12, padding: 16, background: "#ffffff", boxShadow: "0 1px 3px rgba(2,6,23,0.06)", border: "1px solid #e6eef0", display: "flex", flexDirection: "column", gap: 12 }}>
+				<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+					<div>
+						<div style={{ fontSize: 12, color: "#64748b" }}>Total Units</div>
+						<div style={{ fontWeight: 800, fontSize: 20 }}>{totalUnits}</div>
+					</div>
+
+					<div style={{ textAlign: "right" }}>
+						<div style={{ fontSize: 12, color: "#64748b" }}>Total Amount</div>
+						<div style={{ fontWeight: 900, fontSize: 24, color: "#0f766e" }}>PHP {totalAmount.toFixed(2)}</div>
+					</div>
 				</div>
-				<div style={{ display: "flex", justifyContent: "space-between" }}>
-					<span>Total Amount</span>
-					<strong>PHP {totalAmount.toFixed(2)}</strong>
+
+				<div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 6 }}>
+					<button
+						type="button"
+						onClick={handleStartSession}
+						disabled={!canProceed}
+						style={{
+							padding: "16px 28px",
+							borderRadius: 12,
+							border: "none",
+							background: canProceed ? "#0369a1" : "#cbd5e1",
+							color: canProceed ? "#ffffff" : "#334155",
+							cursor: canProceed ? "pointer" : "not-allowed",
+							fontWeight: 800,
+							fontSize: 16,
+							minWidth: 220,
+						}}
+					>
+						{isStarting ? "Starting..." : "Proceed"}
+					</button>
 				</div>
-				<button
-					type="button"
-					onClick={handleStartSession}
-					disabled={!canProceed}
-					style={{
-						marginTop: "8px",
-						padding: "12px 16px",
-						borderRadius: "8px",
-						border: "none",
-						background: canProceed ? "#0f766e" : "#cbd5e1",
-						color: canProceed ? "#ffffff" : "#475569",
-						cursor: canProceed ? "pointer" : "not-allowed",
-						fontWeight: 600,
-					}}
-				>
-					{isStarting ? "Starting..." : "Proceed"}
-				</button>
 			</section>
 
 			{errorMessage ? (
-				<section
-					style={{
-						padding: "12px",
-						borderRadius: "8px",
-						border: "1px solid #fecaca",
-						background: "#fef2f2",
-						color: "#991b1b",
-					}}
-				>
+				<section style={{ borderRadius: 12, padding: 12, background: "#fff7f7", border: "1px solid #fecaca", color: "#991b1b" }}>
 					{errorMessage}
 				</section>
 			) : null}
 
+			{/* Payment Panel */}
 			{session ? (
-				<section
-					style={{
-						border: "1px solid #cbd5e1",
-						borderRadius: "10px",
-						padding: "16px",
-						display: "grid",
-						gap: "10px",
-					}}
-				>
-					<h2 style={{ margin: 0 }}>Payment Session</h2>
-
-					<div style={{ display: "flex", justifyContent: "space-between" }}>
-						<span>Facility</span>
-						<strong>{session.facilityName}</strong>
-					</div>
-					<div style={{ display: "flex", justifyContent: "space-between" }}>
-						<span>Amount Due</span>
-						<strong>PHP {session.amountDue.toFixed(2)}</strong>
-					</div>
-					<div style={{ display: "flex", justifyContent: "space-between" }}>
-						<span>Amount Inserted</span>
-						<strong>PHP {session.amountInserted.toFixed(2)}</strong>
-					</div>
-					<div style={{ display: "flex", justifyContent: "space-between" }}>
-						<span>Remaining Amount</span>
-						<strong>PHP {session.remainingAmount.toFixed(2)}</strong>
-					</div>
-					<div style={{ display: "flex", justifyContent: "space-between" }}>
-						<span>Total Units</span>
-						<strong>{session.totalUnits}</strong>
-					</div>
-					<div style={{ display: "flex", justifyContent: "space-between" }}>
-						<span>Status</span>
-						<strong>{session.status}</strong>
+				<section style={{ borderRadius: 12, padding: 16, background: "#ffffff", boxShadow: "0 1px 3px rgba(2,6,23,0.06)", border: "1px solid #e6eef0" }}>
+					<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+						<h2 style={{ margin: 0, fontSize: 18 }}>Payment</h2>
+						<div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+							<div style={{ fontSize: 12, color: "#64748b" }}>{session.facilityName}</div>
+							<div style={{ padding: "6px 10px", borderRadius: 999, background: session.status.toLowerCase() === "paid" ? "#dcfce7" : "#eef2ff", color: session.status.toLowerCase() === "paid" ? "#166534" : "#3730a3", fontWeight: 700, fontSize: 12 }}>{session.status.toUpperCase()}</div>
+						</div>
 					</div>
 
-					<div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "8px" }}>
-						<button
-							type="button"
-							onClick={() => handleInsertAmount(10)}
-							disabled={isPaymentActionLoading}
-							style={{
-								padding: "10px 12px",
-								borderRadius: "6px",
-								border: "1px solid #cbd5e1",
-								background: "#ffffff",
-								cursor: isPaymentActionLoading ? "not-allowed" : "pointer",
-							}}
-						>
-							{isInserting === 10 ? "Inserting..." : "Insert 10"}
-						</button>
-						<button
-							type="button"
-							onClick={() => handleInsertAmount(20)}
-							disabled={isPaymentActionLoading}
-							style={{
-								padding: "10px 12px",
-								borderRadius: "6px",
-								border: "1px solid #cbd5e1",
-								background: "#ffffff",
-								cursor: isPaymentActionLoading ? "not-allowed" : "pointer",
-							}}
-						>
-							{isInserting === 20 ? "Inserting..." : "Insert 20"}
-						</button>
-						<button
-							type="button"
-							onClick={() => handleInsertAmount(50)}
-							disabled={isPaymentActionLoading}
-							style={{
-								padding: "10px 12px",
-								borderRadius: "6px",
-								border: "1px solid #cbd5e1",
-								background: "#ffffff",
-								cursor: isPaymentActionLoading ? "not-allowed" : "pointer",
-							}}
-						>
-							{isInserting === 50 ? "Inserting..." : "Insert 50"}
-						</button>
+					<div style={{ display: "flex", gap: 12, marginTop: 12, alignItems: "center" }}>
+						<div style={{ flex: 1, padding: 12, borderRadius: 10, background: "#fafafa", border: "1px solid #eef2f7" }}>
+							<div style={{ fontSize: 12, color: "#64748b" }}>Amount Due</div>
+							<div style={{ fontWeight: 900, fontSize: 28, color: "#0f766e" }}>PHP {session.amountDue.toFixed(2)}</div>
+						</div>
+
+						<div style={{ flex: 1, padding: 12, borderRadius: 10, background: "#fff7ed", border: "1px solid #ffedd5" }}>
+							<div style={{ fontSize: 12, color: "#92400e" }}>Inserted</div>
+							<div style={{ fontWeight: 900, fontSize: 28, color: "#b45309" }}>PHP {session.amountInserted.toFixed(2)}</div>
+						</div>
+
+						<div style={{ flex: 1, padding: 12, borderRadius: 10, background: "#fffaf0", border: "1px solid #fef3c7" }}>
+							<div style={{ fontSize: 12, color: "#92400e" }}>Remaining</div>
+							<div style={{ fontWeight: 900, fontSize: 28, color: "#b45309" }}>PHP {session.remainingAmount.toFixed(2)}</div>
+						</div>
 					</div>
 
-					<div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginTop: "8px" }}>
+					<div style={{ marginTop: 14, display: "flex", gap: 12, flexWrap: "wrap" }}>
+						{[10, 20, 50].map((amt) => (
+							<button
+								key={amt}
+								type="button"
+								onClick={() => handleInsertAmount(amt)}
+								disabled={isPaymentActionLoading}
+								style={{
+									padding: "14px 18px",
+									borderRadius: 12,
+									border: "1px solid #cbd5e1",
+									background: "#ffffff",
+									cursor: isPaymentActionLoading ? "not-allowed" : "pointer",
+									fontWeight: 800,
+									minWidth: 140,
+									fontSize: 16,
+								}}
+							>
+								{isInserting === amt ? `Inserting ${amt}...` : `Insert ${amt}`}
+							</button>
+						))}
+					</div>
+
+					<div style={{ marginTop: 14, display: "flex", gap: 12 }}>
 						<button
 							type="button"
 							onClick={handleCompletePayment}
 							disabled={!canComplete || isPaymentActionLoading}
 							style={{
-								padding: "10px 14px",
-								borderRadius: "6px",
+								padding: "14px 20px",
+								borderRadius: 12,
 								border: "none",
-								background: canComplete ? "#0f766e" : "#cbd5e1",
+								background: canComplete ? "#059669" : "#cbd5e1",
 								color: canComplete ? "#ffffff" : "#334155",
 								cursor: canComplete && !isPaymentActionLoading ? "pointer" : "not-allowed",
-								fontWeight: 600,
+								fontWeight: 900,
+								fontSize: 16,
+								minWidth: 220,
 							}}
 						>
 							{isCompleting ? "Completing..." : "Complete Payment"}
@@ -552,56 +545,72 @@ export default function KioskStartPage() {
 							onClick={handleCancelSession}
 							disabled={isPaymentActionLoading}
 							style={{
-								padding: "10px 14px",
-								borderRadius: "6px",
+								padding: "12px 16px",
+								borderRadius: 12,
 								border: "1px solid #cbd5e1",
 								background: "#ffffff",
 								cursor: isPaymentActionLoading ? "not-allowed" : "pointer",
+								fontWeight: 700,
 							}}
 						>
-							Cancel Session
+							Cancel
 						</button>
 					</div>
 				</section>
 			) : null}
 
+			{/* New Transaction button */}
+			{showNewTransactionButton ? (
+				<div style={{ display: "flex", justifyContent: "center" }}>
+					<button
+						type="button"
+						onClick={resetAll}
+						style={{
+							padding: "14px 22px",
+							borderRadius: 12,
+							border: "none",
+							background: "#0b63b2",
+							color: "#fff",
+							cursor: "pointer",
+							fontWeight: 900,
+							fontSize: 16,
+							minWidth: 240,
+						}}
+					>
+						New Transaction
+					</button>
+				</div>
+			) : null}
+
+			{/* Completed result */}
 			{completedTransaction ? (
-				<section
-					style={{
-						border: "1px solid #bbf7d0",
-						borderRadius: "10px",
-						padding: "16px",
-						background: "#f0fdf4",
-						display: "grid",
-						gap: "8px",
-					}}
-				>
-					<h2 style={{ margin: 0 }}>Payment Completed</h2>
-					<div>
-						<strong>Transaction ID:</strong> {completedTransaction.transactionId}
+				<section style={{ borderRadius: 12, padding: 16, background: "#ecfdf5", border: "1px solid #bbf7d0", display: "grid", gap: 8 }}>
+					<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+						<div>
+							<div style={{ fontSize: 12, color: "#065f46" }}>Payment Completed</div>
+							<div style={{ fontWeight: 900, fontSize: 20, color: "#065f46" }}>{completedTransaction.ticketLabel}</div>
+						</div>
+						<div style={{ fontWeight: 800, fontSize: 14, color: "#065f46" }}>ID: {completedTransaction.transactionId}</div>
 					</div>
-					<div>
-						<strong>Ticket Label:</strong> {completedTransaction.ticketLabel}
+
+					<div style={{ display: "flex", gap: 12 }}>
+						<div style={{ flex: 1, padding: 12, borderRadius: 10, background: "#fff", border: "1px solid #e6eef0" }}>
+							<div style={{ fontSize: 12, color: "#64748b" }}>Amount Due</div>
+							<div style={{ fontWeight: 800, fontSize: 18 }}>PHP {completedTransaction.amountDue.toFixed(2)}</div>
+						</div>
+						<div style={{ flex: 1, padding: 12, borderRadius: 10, background: "#fff", border: "1px solid #e6eef0" }}>
+							<div style={{ fontSize: 12, color: "#64748b" }}>Amount Paid</div>
+							<div style={{ fontWeight: 800, fontSize: 18 }}>PHP {completedTransaction.amountPaid.toFixed(2)}</div>
+						</div>
 					</div>
-					<div>
-						<strong>Amount Due:</strong> PHP {completedTransaction.amountDue.toFixed(2)}
-					</div>
-					<div>
-						<strong>Amount Paid:</strong> PHP {completedTransaction.amountPaid.toFixed(2)}
-					</div>
-					<div style={{ marginTop: "8px" }}>
+
+					<div style={{ display: "flex", justifyContent: "center", marginTop: 6 }}>
 						<button
 							type="button"
-							onClick={handleCancelSession}
-							style={{
-								padding: "10px 14px",
-								borderRadius: "6px",
-								border: "1px solid #cbd5e1",
-								background: "#ffffff",
-								cursor: "pointer",
-							}}
+							onClick={resetAll}
+							style={{ padding: "12px 16px", borderRadius: 12, border: "none", background: "#0369a1", color: "#fff", fontWeight: 800, minWidth: 220 }}
 						>
-							Cancel Session
+							New Transaction
 						</button>
 					</div>
 				</section>
