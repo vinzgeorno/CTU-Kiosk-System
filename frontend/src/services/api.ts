@@ -50,3 +50,39 @@ export async function completePaymentSession() {
 		method: "POST",
 	});
 }
+
+export async function getRecentTransactions(limit?: number) {
+	const query = typeof limit === "number" ? `?limit=${limit}` : "";
+
+	return requestJson(`/transactions/recent${query}`, {
+		method: "GET",
+	});
+}
+
+export async function getTicketCounters() {
+	return requestJson("/ticket-counters", {
+		method: "GET",
+	});
+}
+
+export async function getTransactionByTicketLabel(ticketLabel: string) {
+	return requestJson(`/transactions/by-ticket/${encodeURIComponent(ticketLabel)}`, {
+		method: "GET",
+	});
+}
+
+export async function updateTicketCounter(facilityCode: string, lastSequence: number) {
+	return requestJson(`/ticket-counters/${encodeURIComponent(facilityCode)}`, {
+		method: "PATCH",
+		headers: {
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify({ lastSequence }),
+	});
+}
+
+export async function reprintTransactionById(id: number) {
+    return requestJson(`/transactions/${id}/reprint`, {
+        method: "POST",
+    });
+}
