@@ -114,4 +114,38 @@ export class TransactionRepository {
 			breakdown,
 		};
 	}
+
+	getTransactionByTicketLabel(ticketLabel: string) {
+		const transactionStatement = this.database.prepare(
+			`
+				SELECT *
+				FROM transactions
+				WHERE ticket_label = ?
+				LIMIT 1
+			`
+		);
+
+		const transactionRow = transactionStatement.get(ticketLabel) as
+			| Record<string, unknown>
+			| undefined;
+		if (!transactionRow) {
+			return null;
+		}
+
+		const transactionId = Number((transactionRow as { id?: number }).id);
+		const breakdownStatement = this.database.prepare(
+			`
+				SELECT *
+				FROM transaction_breakdown
+				WHERE transaction_id = ?
+			`
+		);
+
+		const breakdown = breakdownStatement.all(transactionId) as Record<string, unknown>[];
+
+		return {
+			...transactionRow,
+			breakdown,
+		};
+	}
 }

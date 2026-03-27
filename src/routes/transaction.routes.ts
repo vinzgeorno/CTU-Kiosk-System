@@ -30,6 +30,10 @@ type ReprintTransactionParams = {
 	id?: string;
 };
 
+type GetTransactionByTicketLabelParams = {
+	ticketLabel?: string;
+};
+
 type TransactionBreakdownRow = {
 	category_code: string;
 	category_label: string;
@@ -215,6 +219,41 @@ export default async function transactionRoutes(fastify: any) {
 					transactionId: id,
 					ticketLabel: record.ticketLabel,
 					printResult,
+				};
+			} catch (error) {
+				return reply.status(500).send({
+					success: false,
+					message: error instanceof Error ? error.message : "Unknown error",
+				});
+			}
+		}
+	);
+
+	fastify.get(
+		"/transactions/by-ticket/:ticketLabel",
+		async (request: { params: GetTransactionByTicketLabelParams }, reply: any) => {
+			const ticketLabel = request.params?.ticketLabel;
+
+			if (typeof ticketLabel !== "string" || ticketLabel.trim() === "") {
+				return reply.status(400).send({
+					success: false,
+					message: "ticketLabel is required and must be a non-empty string.",
+				});
+			}
+
+			try {
+				const transaction = transactionRepository.getTransactionByTicketLabel(ticketLabel);
+
+				if (!transaction) {
+					return reply.status(404).send({
+						success: false,
+						message: "Transaction not found",
+					});
+				}
+
+				return {
+					success: true,
+					transaction,
 				};
 			} catch (error) {
 				return reply.status(500).send({
