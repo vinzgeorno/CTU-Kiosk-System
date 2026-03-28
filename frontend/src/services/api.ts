@@ -116,3 +116,13 @@ export async function getFacilitySummaryReport(startAt: string, endAt: string) {
 		method: "GET",
 	});
 }
+
+export async function printFacilitySummaryReport(payload: unknown) {
+	return requestJson("/reports/facility-summary/print", {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify(payload),
+	});
+}

@@ -23,11 +23,23 @@ type PaymentSessionView = {
 	status: string;
 };
 
+type SelectedBreakdownItem = {
+	code: CategoryCode;
+	label: string;
+	quantity: number;
+	unitPrice: number;
+	subtotal: number;
+};
+
 type CompletionResult = {
 	ticketLabel: string;
 	transactionId: string;
+	facilityName: string;
+	totalUnits: number;
 	amountDue: number;
 	amountPaid: number;
+	completedAt: string;
+	breakdown: SelectedBreakdownItem[];
 };
 
 const asRecord = (value: unknown): Record<string, unknown> | null => {
@@ -77,6 +89,25 @@ const extractDataRecord = (value: unknown) => {
 	return topLevel;
 };
 
+const formatReportPeriod = (value: string | null) => {
+	if (!value) {
+		return "-";
+	}
+
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) {
+		return value;
+	}
+
+	return date.toLocaleString([], {
+		year: "numeric",
+		month: "short",
+		day: "numeric",
+		hour: "numeric",
+		minute: "2-digit",
+	});
+};
+
 export default function KioskStartPage() {
 	const [step, setStep] = useState<KioskStep>("select");
 	const [selection, setSelection] = useState<KioskSelectionState>(initialState);
@@ -85,6 +116,16 @@ export default function KioskStartPage() {
 	const [completedTransaction, setCompletedTransaction] = useState<CompletionResult | null>(null);
 	const [isStarting, setIsStarting] = useState(false);
 	const [isCompleting, setIsCompleting] = useState(false);
+	const [loadingAnimationStep, setLoadingAnimationStep] = useState(0);
+	const [hasTriggeredAutoComplete, setHasTriggeredAutoComplete] = useState(false);
+	const [animatePaidState, setAnimatePaidState] = useState(false);
+	const [isQrAvailable, setIsQrAvailable] = useState(true);
+
+	const formatCategoryLabel = (categoryCode: CategoryCode) =>
+		categoryCode
+			.split("_")
+			.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+			.join(" ");
 
 	const selectedFacility = useMemo(
 		() => facilities.find((facility) => facility.code === selection.facilityCode) ?? null,
@@ -107,15 +148,35 @@ export default function KioskStartPage() {
 		}, 0);
 	}, [selectedFacility, selection.quantities]);
 
+	const selectedBreakdown = useMemo<SelectedBreakdownItem[]>(() => {
+		if (!selectedFacility) {
+			return [];
+		}
+
+		return selectedFacility.categories
+			.map((category) => {
+				const quantity = selection.quantities[category.code] ?? 0;
+
+				return {
+					code: category.code,
+					label: formatCategoryLabel(category.code),
+					quantity,
+					unitPrice: category.price,
+					subtotal: quantity * category.price,
+				};
+			})
+			.filter((item) => item.quantity > 0);
+	}, [selectedFacility, selection.quantities]);
+
 	const canProceed = Boolean(selection.facilityCode) && totalUnits > 0;
 	const canComplete = session?.status === "paid";
 	const remainingAmount = session ? Math.max(session.amountDue - session.amountInserted, 0) : 0;
-
-	const formatCategoryLabel = (categoryCode: CategoryCode) =>
-		categoryCode
-			.split("_")
-			.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-			.join(" ");
+	const isPaymentPaid = session?.status.toLowerCase() === "paid";
+	const receiptQrSource = completedTransaction
+		? `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
+				`${completedTransaction.ticketLabel}|${completedTransaction.transactionId}`
+			)}`
+		: "";
 
 	const mapSessionView = (payload: unknown): PaymentSessionView | null => {
 		const record = extractDataRecord(payload);
@@ -215,10 +276,14 @@ export default function KioskStartPage() {
 				transactionId: record
 					? getString(record, ["transactionId", "transaction_id", "id"], "N/A")
 					: "N/A",
+				facilityName: session.facilityName || selectedFacility?.name || "Selected Facility",
+				totalUnits: session.totalUnits,
 				amountDue: record ? getNumber(record, ["amountDue", "amount_due"], session.amountDue) : session.amountDue,
 				amountPaid: record
 					? getNumber(record, ["amountPaid", "amount_paid"], session.amountInserted)
 					: session.amountInserted,
+				completedAt: new Date().toISOString(),
+				breakdown: selectedBreakdown,
 			});
 
 			setSession(null);
@@ -229,6 +294,56 @@ export default function KioskStartPage() {
 			setIsCompleting(false);
 		}
 	};
+
+	useEffect(() => {
+		if (step !== "payment" || !session || isPaymentPaid) {
+			setLoadingAnimationStep(0);
+			return;
+		}
+
+		const intervalId = window.setInterval(() => {
+			setLoadingAnimationStep((prev) => (prev + 1) % 3);
+		}, 220);
+
+		return () => {
+			window.clearInterval(intervalId);
+		};
+	}, [step, Boolean(session), isPaymentPaid]);
+
+	useEffect(() => {
+		if (!isPaymentPaid) {
+			setAnimatePaidState(false);
+			return;
+		}
+
+		const animationFrameId = window.requestAnimationFrame(() => {
+			setAnimatePaidState(true);
+		});
+
+		return () => {
+			window.cancelAnimationFrame(animationFrameId);
+		};
+	}, [isPaymentPaid]);
+
+	useEffect(() => {
+		if (step !== "payment" || !session || !isPaymentPaid) {
+			setHasTriggeredAutoComplete(false);
+			return;
+		}
+
+		if (hasTriggeredAutoComplete || isCompleting) {
+			return;
+		}
+
+		const timeoutId = window.setTimeout(() => {
+			setHasTriggeredAutoComplete(true);
+			void handleCompletePayment();
+		}, 900);
+
+		return () => {
+			window.clearTimeout(timeoutId);
+		};
+	}, [step, Boolean(session), isPaymentPaid, hasTriggeredAutoComplete, isCompleting]);
 
 	useEffect(() => {
 		if (step !== "payment" || !session) {
@@ -277,6 +392,10 @@ export default function KioskStartPage() {
 			window.clearTimeout(timeoutId);
 		};
 	}, [step]);
+
+	useEffect(() => {
+		setIsQrAvailable(true);
+	}, [completedTransaction?.ticketLabel, completedTransaction?.transactionId]);
 
 	const renderHeader = step === "success" ? (
 		<header
@@ -333,7 +452,7 @@ export default function KioskStartPage() {
 				</div>
 			</div>
 
-			<div style={{ textAlign: "right", color: "#64748b", fontSize: 12, fontWeight: 700 }}>Touch Ready</div>
+			<div />
 		</header>
 	);
 
@@ -349,7 +468,7 @@ export default function KioskStartPage() {
 				alignItems: "center",
 				justifyContent: "center",
 				background:
-					"radial-gradient(1200px 500px at -10% -20%, #e0f2fe 0%, #dbeafe 38%, #e2e8f0 100%)",
+					"radial-gradient(860px 360px at -6% -12%, #e0f2fe 0%, #dbeafe 34%, #e2e8f0 100%)",
 				fontFamily: "Segoe UI, Tahoma, Geneva, Verdana, sans-serif",
 			}}
 		>
@@ -576,27 +695,94 @@ export default function KioskStartPage() {
 							</section>
 						</div>
 
-						<div style={{ flex: "0 0 39%", minWidth: 0, display: "flex", flexDirection: "column", gap: 10, overflow: "hidden" }}>
+						<div
+							style={{
+								flex: "0 0 39%",
+								minWidth: 0,
+								display: "flex",
+								alignItems: "center",
+								justifyContent: "center",
+								overflow: "hidden",
+							}}
+						>
 							<section
 								style={{
-									borderRadius: 14,
-									padding: 12,
+									width: "100%",
+									maxHeight: "100%",
+									borderRadius: 16,
+									padding: 14,
 									background: "linear-gradient(145deg, #ffffff 0%, #f8fafc 100%)",
 									border: "1px solid #dbe7f0",
-									boxShadow: "0 8px 18px rgba(15, 23, 42, 0.07)",
+									boxShadow: "0 10px 22px rgba(15, 23, 42, 0.08)",
 									display: "grid",
-									gap: 10,
-									flexShrink: 0,
+									gridTemplateRows: "auto auto 1fr auto",
+									gap: 12,
+									overflow: "hidden",
 								}}
 							>
-								<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-									<div>
-										<div style={{ fontSize: 11, color: "#64748b", fontWeight: 700 }}>Total Units</div>
-										<div style={{ fontWeight: 900, fontSize: 22, color: "#0f172a" }}>{totalUnits}</div>
+								<div>
+									<div style={{ fontSize: 11, color: "#64748b", fontWeight: 700, letterSpacing: 0.3 }}>
+										Selected Facility
 									</div>
-									<div style={{ textAlign: "right" }}>
-										<div style={{ fontSize: 11, color: "#64748b", fontWeight: 700 }}>Total Amount</div>
-										<div style={{ fontWeight: 900, fontSize: 24, color: "#0f766e" }}>PHP {totalAmount.toFixed(2)}</div>
+									<div style={{ marginTop: 5, fontSize: 20, fontWeight: 900, color: "#0f172a", lineHeight: 1.15 }}>
+										{selectedFacility?.name ?? "Choose a facility"}
+									</div>
+									<div style={{ marginTop: 4, fontSize: 12, color: "#64748b" }}>
+										{selectedFacility?.code ?? "No facility selected yet"}
+									</div>
+								</div>
+
+								<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+									<div style={{ padding: "12px 10px", borderRadius: 12, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+										<div style={{ fontSize: 11, color: "#64748b", fontWeight: 700 }}>Total Units</div>
+										<div style={{ marginTop: 3, fontWeight: 900, fontSize: 24, color: "#0f172a" }}>{totalUnits}</div>
+									</div>
+									<div style={{ padding: "12px 10px", borderRadius: 12, background: "#eff6ff", border: "1px solid #bfdbfe" }}>
+										<div style={{ fontSize: 11, color: "#1d4ed8", fontWeight: 700 }}>Total Amount</div>
+										<div style={{ marginTop: 3, fontWeight: 900, fontSize: 24, color: "#0369a1" }}>PHP {totalAmount.toFixed(2)}</div>
+									</div>
+								</div>
+
+								<div style={{ minHeight: 0, display: "grid", gridTemplateRows: "auto 1fr", gap: 8, overflow: "hidden" }}>
+									<div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a" }}>Category Breakdown</div>
+									<div style={{ minHeight: 0, overflowY: "auto", display: "grid", gap: 8, paddingRight: 2 }}>
+										{selectedBreakdown.length === 0 ? (
+											<div
+												style={{
+													padding: 14,
+													borderRadius: 12,
+													border: "1px dashed #cbd5e1",
+													background: "#f8fafc",
+													color: "#64748b",
+													fontSize: 13,
+													lineHeight: 1.45,
+												}}
+											>
+												Select one or more categories to see the ticket breakdown here.
+											</div>
+										) : (
+											selectedBreakdown.map((item) => (
+												<div
+													key={item.code}
+													style={{
+														padding: "10px 11px",
+														borderRadius: 12,
+														border: "1px solid #dbe7f0",
+														background: "#ffffff",
+														display: "grid",
+														gap: 4,
+													}}
+												>
+													<div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+														<div style={{ fontWeight: 800, fontSize: 13, color: "#0f172a" }}>{item.label}</div>
+														<div style={{ fontWeight: 900, fontSize: 13, color: "#0f766e" }}>PHP {item.subtotal.toFixed(2)}</div>
+													</div>
+													<div style={{ fontSize: 12, color: "#475569" }}>
+														{item.quantity} x PHP {item.unitPrice.toFixed(2)}
+													</div>
+												</div>
+											))
+										)}
 									</div>
 								</div>
 
@@ -605,7 +791,7 @@ export default function KioskStartPage() {
 									onClick={handleStartSession}
 									disabled={!canProceed || isStarting}
 									style={{
-										height: 52,
+										height: 54,
 										padding: "10px 14px",
 										borderRadius: 12,
 										border: "none",
@@ -620,25 +806,6 @@ export default function KioskStartPage() {
 								>
 									{isStarting ? "Starting..." : "Proceed"}
 								</button>
-							</section>
-
-							<section
-								style={{
-									borderRadius: 14,
-									padding: 12,
-									background: "linear-gradient(150deg, #ffffff 0%, #f8fafc 100%)",
-									border: "1px dashed #cbd5e1",
-									display: "flex",
-									alignItems: "center",
-									justifyContent: "center",
-									color: "#64748b",
-									fontSize: 14,
-									fontWeight: 600,
-									flex: 1,
-									minHeight: 0,
-								}}
-							>
-								Payment panel will appear after pressing Proceed.
 							</section>
 						</div>
 					</div>
@@ -655,87 +822,200 @@ export default function KioskStartPage() {
 							border: "1px solid #dbe7f0",
 							boxShadow: "0 8px 18px rgba(15, 23, 42, 0.06)",
 							display: "grid",
-							gridTemplateRows: "auto auto auto 1fr auto",
-							gap: 10,
+							gridTemplateColumns: "minmax(300px, 0.9fr) minmax(340px, 1.1fr)",
+							gap: 12,
 							overflow: "hidden",
 						}}
 					>
-						<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-							<h2 style={{ margin: 0, fontSize: 20, color: "#1e293b" }}>Payment</h2>
-							<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-								<div style={{ fontSize: 13, color: "#475569", fontWeight: 700 }}>{session.facilityName || "Facility"}</div>
+						<div
+							style={{
+								borderRadius: 14,
+								padding: 14,
+								background: "linear-gradient(145deg, #ffffff 0%, #f8fafc 100%)",
+								border: "1px solid #dbe7f0",
+								display: "grid",
+								gridTemplateRows: "auto auto 1fr auto",
+								gap: 12,
+								overflow: "hidden",
+							}}
+						>
+							<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+								<div>
+									<div style={{ fontSize: 11, color: "#64748b", fontWeight: 700 }}>Facility</div>
+									<div style={{ marginTop: 4, fontWeight: 900, fontSize: 19, color: "#0f172a" }}>{session.facilityName || "Facility"}</div>
+								</div>
 								<div
 									style={{
-										padding: "5px 10px",
+										padding: "6px 11px",
 										borderRadius: 999,
-										background: session.status.toLowerCase() === "paid" ? "#dcfce7" : "#eef2ff",
-										color: session.status.toLowerCase() === "paid" ? "#166534" : "#3730a3",
-										fontWeight: 800,
+										background: isPaymentPaid ? "#dcfce7" : "#eef2ff",
+										color: isPaymentPaid ? "#166534" : "#3730a3",
+										fontWeight: 900,
 										fontSize: 12,
+										letterSpacing: 0.4,
 									}}
 								>
 									{session.status.toUpperCase()}
 								</div>
 							</div>
-						</div>
 
-						<div style={{ color: "#64748b", fontSize: 13 }}>
-							Payment breakdown
-						</div>
+							<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+								<div style={{ padding: "12px 10px", borderRadius: 12, background: "#eff6ff", border: "1px solid #bfdbfe" }}>
+									<div style={{ fontSize: 11, color: "#1d4ed8", fontWeight: 700 }}>Amount Due</div>
+									<div style={{ marginTop: 3, fontWeight: 900, fontSize: 22, color: "#0369a1" }}>PHP {session.amountDue.toFixed(2)}</div>
+								</div>
+								<div style={{ padding: "12px 10px", borderRadius: 12, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+									<div style={{ fontSize: 11, color: "#64748b", fontWeight: 700 }}>Total Units</div>
+									<div style={{ marginTop: 3, fontWeight: 900, fontSize: 22, color: "#0f172a" }}>{session.totalUnits}</div>
+								</div>
+							</div>
 
-						<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-							<div style={{ padding: "12px 10px", borderRadius: 12, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
-								<div style={{ fontSize: 11, color: "#64748b" }}>Amount Due</div>
-								<div style={{ marginTop: 2, fontWeight: 900, fontSize: 22, color: "#0f766e" }}>PHP {session.amountDue.toFixed(2)}</div>
+							<div style={{ minHeight: 0, overflowY: "auto", display: "grid", gap: 8, paddingRight: 2 }}>
+								{selectedBreakdown.map((item) => (
+									<div
+										key={item.code}
+										style={{
+											padding: "10px 11px",
+											borderRadius: 12,
+											border: "1px solid #dbe7f0",
+											background: "#ffffff",
+											display: "grid",
+											gap: 4,
+										}}
+									>
+										<div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+											<div style={{ fontWeight: 800, fontSize: 13, color: "#0f172a" }}>{item.label}</div>
+											<div style={{ fontWeight: 900, fontSize: 13, color: "#0f766e" }}>PHP {item.subtotal.toFixed(2)}</div>
+										</div>
+										<div style={{ fontSize: 12, color: "#475569" }}>
+											{item.quantity} x PHP {item.unitPrice.toFixed(2)}
+										</div>
+									</div>
+								))}
 							</div>
-							<div style={{ padding: "12px 10px", borderRadius: 12, background: "#fff7ed", border: "1px solid #ffedd5" }}>
-								<div style={{ fontSize: 11, color: "#92400e" }}>Amount Inserted</div>
-								<div style={{ marginTop: 2, fontWeight: 900, fontSize: 22, color: "#b45309" }}>PHP {session.amountInserted.toFixed(2)}</div>
-							</div>
-							<div style={{ padding: "12px 10px", borderRadius: 12, background: "#fffaf0", border: "1px solid #fef3c7" }}>
-								<div style={{ fontSize: 11, color: "#92400e" }}>Remaining Amount</div>
-								<div style={{ marginTop: 2, fontWeight: 900, fontSize: 22, color: "#b45309" }}>PHP {remainingAmount.toFixed(2)}</div>
-							</div>
-							<div style={{ padding: "12px 10px", borderRadius: 12, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
-								<div style={{ fontSize: 11, color: "#475569" }}>Total Units</div>
-								<div style={{ marginTop: 2, fontWeight: 900, fontSize: 22, color: "#0f172a" }}>{session.totalUnits}</div>
+
+							<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+								<div style={{ padding: "12px 10px", borderRadius: 12, background: "#fff7ed", border: "1px solid #ffedd5" }}>
+									<div style={{ fontSize: 11, color: "#92400e", fontWeight: 700 }}>Amount Inserted</div>
+									<div style={{ marginTop: 3, fontWeight: 900, fontSize: 22, color: "#b45309" }}>PHP {session.amountInserted.toFixed(2)}</div>
+								</div>
+								<div style={{ padding: "12px 10px", borderRadius: 12, background: "#fffaf0", border: "1px solid #fef3c7" }}>
+									<div style={{ fontSize: 11, color: "#92400e", fontWeight: 700 }}>Remaining</div>
+									<div style={{ marginTop: 3, fontWeight: 900, fontSize: 22, color: "#b45309" }}>PHP {remainingAmount.toFixed(2)}</div>
+								</div>
 							</div>
 						</div>
 
 						<div
 							style={{
-								padding: "12px 14px",
-								borderRadius: 12,
-								background: "#f8fafc",
-								border: "1px solid #e2e8f0",
-								display: "grid",
-								gap: 4,
+								borderRadius: 14,
+								padding: 18,
+								background: isPaymentPaid
+									? "linear-gradient(150deg, #ecfdf5 0%, #f0fdf4 100%)"
+									: "linear-gradient(150deg, #ffffff 0%, #eff6ff 100%)",
+								border: isPaymentPaid ? "1px solid #bbf7d0" : "1px solid #dbeafe",
+								display: "flex",
+								alignItems: "center",
+								justifyContent: "center",
+								minHeight: 0,
 							}}
 						>
-							<div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>Please insert exact amount</div>
-							<div style={{ fontSize: 13, color: "#475569" }}>Waiting for coin or bill acceptor input</div>
-						</div>
+							<div style={{ width: "100%", maxWidth: 430, display: "grid", gap: 16, textAlign: "center" }}>
+								{isPaymentPaid ? (
+									<>
+										<div
+											style={{
+												width: 100,
+												height: 100,
+												margin: "0 auto",
+												borderRadius: "50%",
+												background: "#dcfce7",
+												border: "2px solid #86efac",
+												display: "flex",
+												alignItems: "center",
+												justifyContent: "center",
+												transform: animatePaidState ? "scale(1)" : "scale(0.72)",
+												opacity: animatePaidState ? 1 : 0.4,
+												transition: "all 220ms ease",
+											}}
+										>
+											<div
+												style={{
+													fontSize: 48,
+													fontWeight: 900,
+													color: "#16a34a",
+													lineHeight: 1,
+													transform: animatePaidState ? "scale(1)" : "scale(0.5)",
+													transition: "transform 240ms ease",
+												}}
+											>
+												✓
+											</div>
+										</div>
+										<div style={{ fontSize: 30, fontWeight: 900, color: "#166534", lineHeight: 1.05 }}>
+											Payment Received
+										</div>
+										<div style={{ fontSize: 16, color: "#047857", fontWeight: 700 }}>
+											Printing your ticket and preparing the receipt page...
+										</div>
+									</>
+								) : (
+									<>
+										<div style={{ fontSize: 32, fontWeight: 900, color: "#0f172a", lineHeight: 1.05 }}>
+											Enter Exact Payment
+										</div>
+										<div style={{ fontSize: 18, color: "#0369a1", fontWeight: 800 }}>
+											PHP {remainingAmount.toFixed(2)} remaining
+										</div>
+										<div style={{ display: "flex", justifyContent: "center", gap: 10, alignItems: "center" }}>
+											{[0, 1, 2].map((index) => (
+												<div
+													key={index}
+													style={{
+														width: 13,
+														height: 13,
+														borderRadius: "50%",
+														background: "#0ea5e9",
+														opacity: loadingAnimationStep === index ? 1 : 0.24,
+														transform: loadingAnimationStep === index ? "scale(1.15)" : "scale(0.82)",
+														transition: "all 160ms ease",
+													}}
+												/>
+											))}
+										</div>
+										<div style={{ fontSize: 15, color: "#475569", lineHeight: 1.45 }}>
+											Waiting for coin or bill acceptor input.
+										</div>
+									</>
+								)}
 
-						<div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 8 }}>
-							<button
-								type="button"
-								onClick={handleCompletePayment}
-								disabled={!canComplete || isCompleting}
-								style={{
-									height: 56,
-									borderRadius: 12,
-									border: "none",
-									background: canComplete
-										? "linear-gradient(145deg, #10b981 0%, #059669 100%)"
-										: "#cbd5e1",
-									color: canComplete ? "#ffffff" : "#334155",
-									cursor: canComplete && !isCompleting ? "pointer" : "not-allowed",
-									fontWeight: 900,
-									fontSize: 18,
-								}}
-							>
-								{isCompleting ? "Completing..." : "Complete Payment"}
-							</button>
+								<button
+									type="button"
+									onClick={handleCompletePayment}
+									disabled={!isPaymentPaid || isCompleting || !errorMessage}
+									style={{
+										height: 54,
+										borderRadius: 12,
+										border: "none",
+										background:
+											isPaymentPaid && errorMessage && !isCompleting
+												? "linear-gradient(145deg, #10b981 0%, #059669 100%)"
+												: "#cbd5e1",
+										color: isPaymentPaid && errorMessage && !isCompleting ? "#ffffff" : "#334155",
+										cursor: isPaymentPaid && errorMessage && !isCompleting ? "pointer" : "not-allowed",
+										fontWeight: 900,
+										fontSize: 17,
+									}}
+								>
+									{isCompleting
+										? "Preparing Ticket..."
+										: isPaymentPaid
+											? errorMessage
+												? "Retry Ticket Completion"
+												: "Preparing Ticket..."
+											: "Waiting for Payment"}
+								</button>
+							</div>
 						</div>
 					</section>
 				) : null}
@@ -746,46 +1026,157 @@ export default function KioskStartPage() {
 							flex: 1,
 							minHeight: 0,
 							borderRadius: 18,
-							padding: 18,
-							background: "linear-gradient(145deg, #ecfdf5 0%, #f0fdf4 100%)",
-							border: "1px solid #bbf7d0",
-							boxShadow: "0 12px 24px rgba(5, 150, 105, 0.12)",
-							display: "grid",
-							placeItems: "center",
+							padding: 16,
+							background: "linear-gradient(145deg, #f8fafc 0%, #eef2f7 100%)",
+							border: "1px solid #dbe7f0",
+							boxShadow: "0 12px 24px rgba(15, 23, 42, 0.08)",
+							display: "flex",
+							alignItems: "center",
+							justifyContent: "center",
 							overflow: "hidden",
 						}}
 					>
 						<div
 							style={{
-								width: "min(100%, 560px)",
-								borderRadius: 14,
-								padding: 16,
-								background: "#ffffff",
-								border: "1px solid #d1fae5",
+								width: "min(100%, 720px)",
+								maxHeight: "100%",
+								borderRadius: 18,
+								padding: 18,
+								background: "#fffef7",
+								border: "1px solid #e5e7eb",
+								boxShadow: "0 12px 26px rgba(15, 23, 42, 0.12)",
 								display: "grid",
-								gap: 10,
+								gap: 14,
+								position: "relative",
+								fontFamily: "Courier New, monospace",
+								overflow: "hidden",
 							}}
 						>
-							<div style={{ textAlign: "center" }}>
-								<div style={{ fontSize: 14, color: "#065f46", fontWeight: 800 }}>Payment Successful</div>
-								<div style={{ marginTop: 4, fontSize: 24, color: "#065f46", fontWeight: 900 }}>
+							<div
+								style={{
+									position: "absolute",
+									left: -10,
+									top: "46%",
+									width: 20,
+									height: 20,
+									borderRadius: "50%",
+									background: "#eef2f7",
+									border: "1px solid #dbe7f0",
+								}}
+							/>
+							<div
+								style={{
+									position: "absolute",
+									right: -10,
+									top: "46%",
+									width: 20,
+									height: 20,
+									borderRadius: "50%",
+									background: "#eef2f7",
+									border: "1px solid #dbe7f0",
+								}}
+							/>
+
+							<div style={{ textAlign: "center", display: "grid", gap: 5 }}>
+								<div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", letterSpacing: 1.2 }}>CTU KIOSK TICKET</div>
+								<div style={{ fontSize: 24, fontWeight: 900, color: "#111827", letterSpacing: 0.6 }}>
 									{completedTransaction.ticketLabel}
 								</div>
-							</div>
-
-							<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-								<div style={{ padding: 10, borderRadius: 10, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
-									<div style={{ fontSize: 11, color: "#64748b" }}>Transaction ID</div>
-									<div style={{ marginTop: 2, fontWeight: 800, fontSize: 16, color: "#0f172a" }}>{completedTransaction.transactionId}</div>
-								</div>
-								<div style={{ padding: 10, borderRadius: 10, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
-									<div style={{ fontSize: 11, color: "#64748b" }}>Amount Paid</div>
-									<div style={{ marginTop: 2, fontWeight: 800, fontSize: 16, color: "#0f172a" }}>PHP {completedTransaction.amountPaid.toFixed(2)}</div>
+								<div style={{ fontSize: 12, color: "#475569", fontWeight: 700 }}>
+									Payment received and ticket printed
 								</div>
 							</div>
 
-							<div style={{ textAlign: "center", fontSize: 12, color: "#047857", fontWeight: 700 }}>
-								Returning to home in 4 seconds...
+							<div style={{ borderTop: "1px dashed #94a3b8" }} />
+
+							<div style={{ display: "grid", gridTemplateColumns: "1.2fr 180px", gap: 16, alignItems: "start" }}>
+								<div style={{ display: "grid", gap: 8 }}>
+									<div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13 }}>
+										<span style={{ color: "#64748b" }}>FACILITY</span>
+										<span style={{ fontWeight: 800, color: "#111827", textAlign: "right" }}>{completedTransaction.facilityName}</span>
+									</div>
+									<div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13 }}>
+										<span style={{ color: "#64748b" }}>TRANSACTION ID</span>
+										<span style={{ fontWeight: 800, color: "#111827", textAlign: "right" }}>{completedTransaction.transactionId}</span>
+									</div>
+									<div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13 }}>
+										<span style={{ color: "#64748b" }}>TOTAL UNITS</span>
+										<span style={{ fontWeight: 800, color: "#111827", textAlign: "right" }}>{completedTransaction.totalUnits}</span>
+									</div>
+									<div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13 }}>
+										<span style={{ color: "#64748b" }}>AMOUNT DUE</span>
+										<span style={{ fontWeight: 800, color: "#111827", textAlign: "right" }}>PHP {completedTransaction.amountDue.toFixed(2)}</span>
+									</div>
+									<div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13 }}>
+										<span style={{ color: "#64748b" }}>AMOUNT PAID</span>
+										<span style={{ fontWeight: 800, color: "#111827", textAlign: "right" }}>PHP {completedTransaction.amountPaid.toFixed(2)}</span>
+									</div>
+									<div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13 }}>
+										<span style={{ color: "#64748b" }}>PRINTED AT</span>
+										<span style={{ fontWeight: 800, color: "#111827", textAlign: "right" }}>{formatReportPeriod(completedTransaction.completedAt)}</span>
+									</div>
+								</div>
+
+								<div
+									style={{
+										width: 180,
+										padding: 10,
+										borderRadius: 12,
+										border: "1px solid #dbe7f0",
+										background: "#ffffff",
+										display: "grid",
+										gap: 8,
+										justifyItems: "center",
+									}}
+								>
+									{isQrAvailable ? (
+										<img
+											src={receiptQrSource}
+											alt="Ticket QR Code"
+											onError={() => setIsQrAvailable(false)}
+											style={{ width: 150, height: 150, objectFit: "contain", imageRendering: "pixelated" }}
+										/>
+									) : (
+										<div
+											style={{
+												width: 150,
+												height: 150,
+												display: "flex",
+												alignItems: "center",
+												justifyContent: "center",
+												borderRadius: 10,
+												background: "#f8fafc",
+												border: "1px dashed #cbd5e1",
+												fontSize: 12,
+												color: "#64748b",
+												textAlign: "center",
+											}}
+										>
+											QR unavailable
+										</div>
+									)}
+									<div style={{ fontSize: 11, color: "#475569", textAlign: "center", lineHeight: 1.35 }}>
+										Scan or present this ticket code
+									</div>
+								</div>
+							</div>
+
+							<div style={{ borderTop: "1px dashed #94a3b8" }} />
+
+							<div style={{ display: "grid", gap: 7 }}>
+								<div style={{ fontSize: 12, fontWeight: 800, color: "#0f172a" }}>ITEM BREAKDOWN</div>
+								{completedTransaction.breakdown.map((item) => (
+									<div key={item.code} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 12, color: "#111827" }}>
+										<span>{item.label} x{item.quantity}</span>
+										<span style={{ fontWeight: 800 }}>PHP {item.subtotal.toFixed(2)}</span>
+									</div>
+								))}
+							</div>
+
+							<div style={{ borderTop: "1px dashed #94a3b8" }} />
+
+							<div style={{ textAlign: "center", fontSize: 12, color: "#334155", lineHeight: 1.45, fontWeight: 700 }}>
+								Keep this ticket with you. Returning to home in 4 seconds...
 							</div>
 						</div>
 					</section>

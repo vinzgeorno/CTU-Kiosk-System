@@ -8,6 +8,7 @@ import {
 	updateTicketCounter,
 	getTransactionStats,
 	getFacilitySummaryReport,
+	printFacilitySummaryReport,
 } from "../services/api";
 import type {
 	RecentTransaction,
@@ -215,6 +216,11 @@ export default function AdminPage() {
 	const [facilitySummaryRows, setFacilitySummaryRows] = useState<FacilitySummaryReportRow[]>([]);
 	const [isLoadingFacilityReport, setIsLoadingFacilityReport] = useState(false);
 	const [facilityReportError, setFacilityReportError] = useState<string | null>(null);
+	const [facilityReportPrintMessage, setFacilityReportPrintMessage] = useState<{
+		type: "success" | "error";
+		text: string;
+	} | null>(null);
+	const [isPrintingFacilityReport, setIsPrintingFacilityReport] = useState(false);
 	const [facilityReportPeriod, setFacilityReportPeriod] = useState<{ startAt: string | null; endAt: string | null }>({
 		startAt: null,
 		endAt: null,
@@ -367,6 +373,7 @@ export default function AdminPage() {
 
 		setIsLoadingFacilityReport(true);
 		setFacilityReportError(null);
+		setFacilityReportPrintMessage(null);
 		setFacilityReportPeriod({ startAt, endAt });
 
 		try {
@@ -381,6 +388,36 @@ export default function AdminPage() {
 			);
 		} finally {
 			setIsLoadingFacilityReport(false);
+		}
+	};
+
+	const handlePrintFacilityReport = async () => {
+		if (!facilityReportPeriod.startAt || !facilityReportPeriod.endAt || facilitySummaryRows.length === 0) {
+			return;
+		}
+
+		setIsPrintingFacilityReport(true);
+		setFacilityReportPrintMessage(null);
+
+		try {
+			await printFacilitySummaryReport({
+				reportTitle: "9AM-9AM Facility Summary",
+				startAt: facilityReportPeriod.startAt,
+				endAt: facilityReportPeriod.endAt,
+				rows: facilitySummaryRows,
+			});
+
+			setFacilityReportPrintMessage({
+				type: "success",
+				text: "Facility summary report sent to the printer.",
+			});
+		} catch (error) {
+			setFacilityReportPrintMessage({
+				type: "error",
+				text: error instanceof Error ? error.message : "Failed to print facility summary report.",
+			});
+		} finally {
+			setIsPrintingFacilityReport(false);
 		}
 	};
 
@@ -720,23 +757,44 @@ export default function AdminPage() {
 						Load a 9AM-to-9AM facility summary for the current operating day.
 					</p>
 				</div>
-				<button
-					type="button"
-					onClick={handleLoadFacilityReport}
-					disabled={isLoadingFacilityReport}
-					style={{
-						padding: "10px 14px",
-						borderRadius: 10,
-						border: "none",
-						background: "#1d4ed8",
-						color: "#ffffff",
-						fontWeight: 700,
-						fontSize: 14,
-						cursor: isLoadingFacilityReport ? "not-allowed" : "pointer",
-					}}
-				>
-					{isLoadingFacilityReport ? "Loading Report..." : "Load 9AM-9AM Report"}
-				</button>
+				<div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+					<button
+						type="button"
+						onClick={handleLoadFacilityReport}
+						disabled={isLoadingFacilityReport}
+						style={{
+							padding: "10px 14px",
+							borderRadius: 10,
+							border: "none",
+							background: "#1d4ed8",
+							color: "#ffffff",
+							fontWeight: 700,
+							fontSize: 14,
+							cursor: isLoadingFacilityReport ? "not-allowed" : "pointer",
+						}}
+					>
+						{isLoadingFacilityReport ? "Loading Report..." : "Load 9AM-9AM Report"}
+					</button>
+					{facilitySummaryRows.length > 0 ? (
+						<button
+							type="button"
+							onClick={handlePrintFacilityReport}
+							disabled={isPrintingFacilityReport}
+							style={{
+								padding: "10px 14px",
+								borderRadius: 10,
+								border: "none",
+								background: "#0f766e",
+								color: "#ffffff",
+								fontWeight: 700,
+								fontSize: 14,
+								cursor: isPrintingFacilityReport ? "not-allowed" : "pointer",
+							}}
+						>
+							{isPrintingFacilityReport ? "Printing..." : "Print Report"}
+						</button>
+					) : null}
+				</div>
 			</div>
 
 			<div
@@ -765,6 +823,9 @@ export default function AdminPage() {
 			</div>
 
 			{facilityReportError ? <div style={messageStyle("error")}>{facilityReportError}</div> : null}
+			{facilityReportPrintMessage ? (
+				<div style={messageStyle(facilityReportPrintMessage.type)}>{facilityReportPrintMessage.text}</div>
+			) : null}
 
 			{isLoadingFacilityReport ? (
 				<div style={emptyStateStyle}>Loading facility summary report...</div>
@@ -833,10 +894,12 @@ export default function AdminPage() {
 	return (
 		<div
 			style={{
-				minHeight: "100vh",
+				height: "100vh",
 				padding: 24,
 				background: "linear-gradient(180deg, #e2e8f0 0%, #f8fafc 28%, #f8fafc 100%)",
 				overflowY: "auto",
+				overflowX: "hidden",
+				boxSizing: "border-box",
 				fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
 			}}
 		>

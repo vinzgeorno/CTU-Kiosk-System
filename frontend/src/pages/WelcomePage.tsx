@@ -28,7 +28,7 @@ export default function WelcomePage() {
 				style={{
 					position: "absolute",
 					inset: 0,
-					background: "linear-gradient(135deg, rgba(5, 15, 30, 0.78) 0%, rgba(7, 18, 34, 0.68) 48%, rgba(9, 25, 46, 0.76) 100%)",
+					background: "linear-gradient(135deg, rgba(6, 16, 30, 0.64) 0%, rgba(7, 18, 34, 0.54) 48%, rgba(9, 25, 46, 0.62) 100%)",
 				}}
 			/>
 
@@ -36,15 +36,15 @@ export default function WelcomePage() {
 				style={{
 					position: "relative",
 					zIndex: 1,
-					width: "min(92vw, 1024px)",
-					height: "min(92vh, 600px)",
+					width: "min(88vw, 960px)",
+					height: "min(86vh, 540px)",
 					boxSizing: "border-box",
-					padding: "34px 42px",
+					padding: "30px 38px",
 					borderRadius: 24,
-					background: "linear-gradient(165deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.09) 100%)",
-					border: "1px solid rgba(255,255,255,0.26)",
-					boxShadow: "0 30px 70px rgba(2, 6, 23, 0.5)",
-					backdropFilter: "blur(8px)",
+					background: "linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.07) 100%)",
+					border: "1px solid rgba(255,255,255,0.2)",
+					boxShadow: "0 24px 56px rgba(2, 6, 23, 0.42)",
+					backdropFilter: "blur(5px)",
 					display: "flex",
 					flexDirection: "column",
 					alignItems: "center",
