@@ -76,10 +76,12 @@ export class TransactionRecordBuilderService {
 			throw new Error("startedAt must be a valid ISO date string.");
 		}
 
-		const completedAt = createdAt ?? new Date().toISOString();
+		const completedAt = createdAt;
+		const startedAtDate = new Date(startedAt);
+		const completedAtDate = new Date(completedAt);
 		const durationMs =
-			!Number.isNaN(Date.parse(startedAt)) && !Number.isNaN(Date.parse(completedAt))
-				? Math.max(0, Date.parse(completedAt) - Date.parse(startedAt))
+			!Number.isNaN(startedAtDate.getTime()) && !Number.isNaN(completedAtDate.getTime())
+				? Math.max(0, completedAtDate.getTime() - startedAtDate.getTime())
 				: undefined;
 
 		return {
