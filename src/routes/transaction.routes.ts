@@ -1,7 +1,7 @@
 import { db } from "../db/sqlite";
 import { TicketCounterRepository } from "../db/ticket-counter.repository";
 import { TransactionRepository } from "../db/transaction.repository";
-import { PaymentSessionStore } from "../hardware/payment-session.store";
+import { paymentSessionStore } from "../hardware/shared-payment-session";
 import { mapTransactionToPrintableTicketData } from "../printing/printer.mapper";
 import { PrinterService } from "../printing/printer.service";
 import { buildTransactionDetails } from "../services/transaction-builder.service";
@@ -75,7 +75,6 @@ export default async function transactionRoutes(fastify: any) {
 	);
 	const transactionRepository = new TransactionRepository(db);
 	const printerService = new PrinterService();
-	const paymentSessionStore = new PaymentSessionStore();
 	const processTransactionService = new ProcessTransactionService(
 		transactionRecordBuilderService,
 		transactionRepository,

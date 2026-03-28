@@ -2,14 +2,13 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { MqttListenerService } from "./hardware/mqtt-listener.service";
 import { env } from "./config/env";
-import { PaymentSessionStore } from "./hardware/payment-session.store";
+import { paymentSessionStore } from "./hardware/shared-payment-session";
 import healthRoutes from "./routes/health.routes";
 import transactionRoutes from "./routes/transaction.routes";
 import { ApplyPaymentEventService } from "./services/apply-payment-event.service";
 
 const app = Fastify();
 
-const paymentSessionStore = new PaymentSessionStore();
 const applyPaymentEventService = new ApplyPaymentEventService(paymentSessionStore);
 
 const mqttBrokerUrl = env.MQTT_BROKER_URL;
