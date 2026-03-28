@@ -11,5 +11,6 @@ html, body, #root {
 }
 
 body {
-  font-family: Arial, sans-serif;
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  background: #0f172a;
 }

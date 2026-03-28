@@ -5,7 +5,6 @@ import { KioskSelectionState } from "../types/kiosk";
 import {
 	completePaymentSession,
 	getCurrentPaymentSession,
-	insertPaymentAmount,
 	startPaymentSession,
 } from "../services/api";
 
@@ -84,7 +83,6 @@ export default function KioskStartPage() {
 	const [completedTransaction, setCompletedTransaction] = useState<CompletionResult | null>(null);
 	const [isPaymentActionLoading, setIsPaymentActionLoading] = useState(false);
 	const [isStarting, setIsStarting] = useState(false);
-	const [isInserting, setIsInserting] = useState<number | null>(null);
 	const [isCompleting, setIsCompleting] = useState(false);
 
 	const selectedFacility = useMemo(
@@ -219,17 +217,6 @@ export default function KioskStartPage() {
 		}
 	};
 
-	const refreshCurrentSession = async (fallbackSession: PaymentSessionView) => {
-		const currentResult = await getCurrentPaymentSession();
-		const nextSession = mapSessionView(
-			currentResult,
-			fallbackSession.facilityName,
-			fallbackSession.amountDue,
-			fallbackSession.totalUnits
-		);
-		setSession(nextSession);
-	};
-
 	useEffect(() => {
 		if (!session || completedTransaction) {
 			return;
@@ -272,26 +259,6 @@ export default function KioskStartPage() {
 		};
 	}, [Boolean(session), Boolean(completedTransaction)]);
 
-	const handleInsertAmount = async (amount: number) => {
-		if (!session) {
-			return;
-		}
-
-		setIsPaymentActionLoading(true);
-		setIsInserting(amount);
-		setErrorMessage(null);
-
-		try {
-			await insertPaymentAmount(amount);
-			await refreshCurrentSession(session);
-		} catch (error) {
-			setErrorMessage(error instanceof Error ? error.message : "Failed to insert payment amount");
-		} finally {
-			setIsPaymentActionLoading(false);
-			setIsInserting(null);
-		}
-	};
-
 	const handleCompletePayment = async () => {
 		if (!session || !canComplete) {
 			return;
@@ -332,20 +299,9 @@ export default function KioskStartPage() {
 		setIsPaymentActionLoading(false);
 	};
 
-	const resetAll = () => {
-		setSelection(initialState);
-		setSession(null);
-		setCompletedTransaction(null);
-		setErrorMessage(null);
-		setIsStarting(false);
-		setIsInserting(null);
-		setIsCompleting(false);
-		setIsPaymentActionLoading(false);
+	const handleGoHome = () => {
+		window.location.pathname = "/";
 	};
-
-	const showNewTransactionButton = Boolean(
-		completedTransaction || (session === null && (selection.facilityCode !== null || totalUnits > 0 || errorMessage !== null))
-	);
 
 	return (
 		<div
@@ -353,415 +309,475 @@ export default function KioskStartPage() {
 				width: "100vw",
 				height: "100vh",
 				overflow: "hidden",
-				padding: "12px",
-				boxSizing: "border-box",
+				margin: 0,
+				padding: 0,
 				display: "flex",
-				flexDirection: "column",
-				gap: "10px",
-				background: "#f5f8fb",
-				fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+				alignItems: "center",
+				justifyContent: "center",
+				background:
+					"radial-gradient(1200px 500px at -10% -20%, #e0f2fe 0%, #dbeafe 38%, #e2e8f0 100%)",
+				fontFamily: "Segoe UI, Tahoma, Geneva, Verdana, sans-serif",
 			}}
 		>
-			<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
-				<div>
-					<h1 style={{ margin: 0, fontSize: "24px", lineHeight: 1.1 }}>CTU Kiosk Ticketing</h1>
-					<div style={{ marginTop: 2, color: "#475569", fontSize: "13px" }}>Tap selections, insert payment, and complete.</div>
-				</div>
-				{showNewTransactionButton ? (
-					<button
-						type="button"
-						onClick={resetAll}
-						style={{
-							padding: "12px 18px",
-							borderRadius: 10,
-							border: "none",
-							background: "#0b63b2",
-							color: "#fff",
-							cursor: "pointer",
-							fontWeight: 800,
-							fontSize: 15,
-							minWidth: 190,
-							height: 48,
-						}}
-					>
-						New Transaction
-					</button>
-				) : null}
-			</div>
-
-			{errorMessage ? (
-				<section
+			<div
+				style={{
+					width: "min(100vw, 1024px)",
+					height: "min(100vh, 600px)",
+					boxSizing: "border-box",
+					padding: 12,
+					display: "flex",
+					flexDirection: "column",
+					gap: 10,
+					overflow: "hidden",
+					background: "linear-gradient(160deg, #ffffff 0%, #f8fafc 100%)",
+					border: "1px solid #dbe7f0",
+					borderRadius: 18,
+					boxShadow: "0 18px 35px rgba(15, 23, 42, 0.14)",
+				}}
+			>
+				<header
 					style={{
-						borderRadius: 10,
-						padding: "9px 12px",
-						background: "#fff7f7",
-						border: "1px solid #fecaca",
-						color: "#991b1b",
-						fontSize: 13,
+						display: "grid",
+						gridTemplateColumns: "150px 1fr 150px",
+						alignItems: "center",
+						gap: 8,
 						flexShrink: 0,
 					}}
 				>
-					{errorMessage}
-				</section>
-			) : null}
+					<button
+						type="button"
+						onClick={handleGoHome}
+						style={{
+							height: 44,
+							borderRadius: 12,
+							border: "1px solid #93c5fd",
+							background: "linear-gradient(145deg, #eff6ff 0%, #dbeafe 100%)",
+							color: "#0f172a",
+							fontWeight: 800,
+							fontSize: 15,
+							cursor: "pointer",
+						}}
+					>
+						Home
+					</button>
 
-			<div style={{ flex: 1, minHeight: 0, display: "flex", gap: 10, overflow: "hidden" }}>
-				<div style={{ flex: "0 0 58%", minWidth: 0, display: "flex", flexDirection: "column", gap: 10, overflow: "hidden" }}>
+					<div style={{ textAlign: "center", minWidth: 0 }}>
+						<h1 style={{ margin: 0, fontSize: 27, lineHeight: 1.05, color: "#0f172a", letterSpacing: 0.2 }}>
+							CTU Kiosk Ticketing
+						</h1>
+						<div style={{ marginTop: 3, color: "#475569", fontSize: 12 }}>
+							Select tickets, pay at the kiosk, then complete checkout
+						</div>
+					</div>
+
+					<div style={{ textAlign: "right", color: "#64748b", fontSize: 12, fontWeight: 700 }}>Touch Ready</div>
+				</header>
+
+				{errorMessage ? (
 					<section
 						style={{
 							borderRadius: 12,
-							padding: 12,
-							background: "#ffffff",
-							border: "1px solid #e6eef0",
+							padding: "9px 12px",
+							background: "linear-gradient(90deg, #fff1f2 0%, #fff7ed 100%)",
+							border: "1px solid #fecaca",
+							color: "#991b1b",
+							fontSize: 13,
+							fontWeight: 600,
 							flexShrink: 0,
 						}}
 					>
-						<h2 style={{ margin: 0, fontSize: 16 }}>Facility</h2>
-						<div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-							{facilities.map((facility) => {
-								const isSelected = selection.facilityCode === facility.code;
-
-								return (
-									<button
-										key={facility.code}
-										type="button"
-										onClick={() => handleSelectFacility(facility.code)}
-										style={{
-											padding: "12px",
-											borderRadius: 10,
-											border: isSelected ? "2px solid #0369a1" : "1px solid #cbd5e1",
-											background: isSelected ? "#e0f2fe" : "#ffffff",
-											cursor: "pointer",
-											textAlign: "left",
-											height: 74,
-											display: "flex",
-											flexDirection: "column",
-											justifyContent: "center",
-										}}
-									>
-										<div style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.2 }}>{facility.name}</div>
-										<div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>{facility.code}</div>
-									</button>
-								);
-							})}
-						</div>
+						{errorMessage}
 					</section>
+				) : null}
 
-					<section
-						style={{
-							borderRadius: 12,
-							padding: 12,
-							background: "#ffffff",
-							border: "1px solid #e6eef0",
-							flex: 1,
-							minHeight: 0,
-							overflow: "hidden",
-							display: "flex",
-							flexDirection: "column",
-						}}
-					>
-						<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
-							<h2 style={{ margin: 0, fontSize: 16 }}>Categories</h2>
-							<button
-								type="button"
-								onClick={handleClear}
-								disabled={!selectedFacility}
-								style={{
-									padding: "8px 12px",
-									borderRadius: 8,
-									border: "1px solid #cbd5e1",
-									background: "#ffffff",
-									cursor: selectedFacility ? "pointer" : "not-allowed",
-									fontWeight: 700,
-									fontSize: 13,
-									height: 36,
-								}}
-							>
-								Clear
-							</button>
-						</div>
-
-						{!selectedFacility ? (
-							<div style={{ marginTop: 10, color: "#64748b", fontSize: 13 }}>Choose a facility to show categories.</div>
-						) : (
-							<div style={{ marginTop: 8, display: "grid", gap: 8, flex: 1, minHeight: 0 }}>
-								{selectedFacility.categories.map((category) => {
-									const quantity = selection.quantities[category.code] ?? 0;
+				<div style={{ flex: 1, minHeight: 0, display: "flex", gap: 10, overflow: "hidden" }}>
+					<div style={{ flex: "0 0 61%", minWidth: 0, display: "flex", flexDirection: "column", gap: 10, overflow: "hidden" }}>
+						<section
+							style={{
+								borderRadius: 14,
+								padding: 12,
+								background: "linear-gradient(145deg, #ffffff 0%, #f8fbff 100%)",
+								border: "1px solid #dbe7f0",
+								boxShadow: "0 8px 18px rgba(15, 23, 42, 0.07)",
+								flexShrink: 0,
+							}}
+						>
+							<h2 style={{ margin: 0, fontSize: 16, color: "#1e293b" }}>Facility</h2>
+							<div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+								{facilities.map((facility) => {
+									const isSelected = selection.facilityCode === facility.code;
 
 									return (
-										<div
-											key={category.code}
+										<button
+											key={facility.code}
+											type="button"
+											onClick={() => handleSelectFacility(facility.code)}
 											style={{
+												padding: "10px 12px",
+												borderRadius: 12,
+												border: isSelected ? "2px solid #0284c7" : "1px solid #cbd5e1",
+												background: isSelected
+													? "linear-gradient(145deg, #e0f2fe 0%, #dbeafe 100%)"
+													: "linear-gradient(145deg, #ffffff 0%, #f8fafc 100%)",
+												boxShadow: isSelected ? "0 10px 18px rgba(2, 132, 199, 0.22)" : "none",
+												cursor: "pointer",
+												textAlign: "left",
+												height: 72,
 												display: "flex",
-												alignItems: "center",
-												gap: 8,
-												padding: "8px 10px",
-												borderRadius: 10,
-												border: "1px solid #eef2f7",
-												background: "#fff",
-												minHeight: 62,
+												flexDirection: "column",
+												justifyContent: "center",
 											}}
 										>
-											<div style={{ flex: 1, minWidth: 0 }}>
-												<div style={{ fontWeight: 700, fontSize: 15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formatCategoryLabel(category.code)}</div>
-												<div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>PHP {category.price.toFixed(2)} each</div>
-											</div>
-
-											<div style={{ display: "flex", gap: 7, alignItems: "center", flexShrink: 0 }}>
-												<button
-													type="button"
-													onClick={() => handleChangeQuantity(category.code, -1)}
-													aria-label={`Decrease ${category.code}`}
-													style={{
-														width: 44,
-														height: 44,
-														borderRadius: 10,
-														border: "1px solid #cbd5e1",
-														background: "#fff",
-														fontSize: 24,
-														cursor: "pointer",
-														display: "flex",
-														alignItems: "center",
-														justifyContent: "center",
-														lineHeight: 1,
-													}}
-												>
-													−
-												</button>
-
-												<div style={{ minWidth: 36, textAlign: "center", fontWeight: 800, fontSize: 20 }}>{quantity}</div>
-
-												<button
-													type="button"
-													onClick={() => handleChangeQuantity(category.code, 1)}
-													aria-label={`Increase ${category.code}`}
-													style={{
-														width: 44,
-														height: 44,
-														borderRadius: 10,
-														border: "1px solid #0369a1",
-														background: "#0369a1",
-														color: "#ffffff",
-														fontSize: 22,
-														cursor: "pointer",
-														display: "flex",
-														alignItems: "center",
-														justifyContent: "center",
-														lineHeight: 1,
-													}}
-												>
-													+
-												</button>
-											</div>
-										</div>
+											<div style={{ fontWeight: 800, fontSize: 14, lineHeight: 1.2, color: "#0f172a" }}>{facility.name}</div>
+											<div style={{ fontSize: 11, color: "#475569", marginTop: 4 }}>{facility.code}</div>
+										</button>
 									);
 								})}
 							</div>
-						)}
-					</section>
-				</div>
-
-				<div style={{ flex: "0 0 42%", minWidth: 0, display: "flex", flexDirection: "column", gap: 10, overflow: "hidden" }}>
-					<section
-						style={{
-							borderRadius: 12,
-							padding: 12,
-							background: "#ffffff",
-							border: "1px solid #e6eef0",
-							display: "grid",
-							gap: 10,
-							flexShrink: 0,
-						}}
-					>
-						<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-							<div>
-								<div style={{ fontSize: 11, color: "#64748b" }}>Total Units</div>
-								<div style={{ fontWeight: 800, fontSize: 20 }}>{totalUnits}</div>
-							</div>
-							<div style={{ textAlign: "right" }}>
-								<div style={{ fontSize: 11, color: "#64748b" }}>Total Amount</div>
-								<div style={{ fontWeight: 900, fontSize: 24, color: "#0f766e" }}>PHP {totalAmount.toFixed(2)}</div>
-							</div>
-						</div>
-
-						<button
-							type="button"
-							onClick={handleStartSession}
-							disabled={!canProceed}
-							style={{
-								height: 52,
-								padding: "10px 14px",
-								borderRadius: 10,
-								border: "none",
-								background: canProceed ? "#0369a1" : "#cbd5e1",
-								color: canProceed ? "#ffffff" : "#334155",
-								cursor: canProceed ? "pointer" : "not-allowed",
-								fontWeight: 800,
-								fontSize: 17,
-							}}
-						>
-							{isStarting ? "Starting..." : "Proceed"}
-						</button>
-					</section>
-
-					{completedTransaction ? (
-						<section
-							style={{
-								borderRadius: 12,
-								padding: 12,
-								background: "#ecfdf5",
-								border: "1px solid #bbf7d0",
-								display: "grid",
-								gap: 8,
-								flex: 1,
-								minHeight: 0,
-							}}
-						>
-							<div style={{ fontSize: 12, color: "#065f46", fontWeight: 700 }}>Payment Completed</div>
-							<div style={{ fontWeight: 900, fontSize: 20, color: "#065f46", lineHeight: 1.1 }}>{completedTransaction.ticketLabel}</div>
-							<div style={{ fontWeight: 700, fontSize: 13, color: "#065f46" }}>ID: {completedTransaction.transactionId}</div>
-
-							<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 2 }}>
-								<div style={{ padding: 10, borderRadius: 8, background: "#fff", border: "1px solid #e6eef0" }}>
-									<div style={{ fontSize: 11, color: "#64748b" }}>Amount Due</div>
-									<div style={{ fontWeight: 800, fontSize: 17 }}>PHP {completedTransaction.amountDue.toFixed(2)}</div>
-								</div>
-								<div style={{ padding: 10, borderRadius: 8, background: "#fff", border: "1px solid #e6eef0" }}>
-									<div style={{ fontSize: 11, color: "#64748b" }}>Amount Paid</div>
-									<div style={{ fontWeight: 800, fontSize: 17 }}>PHP {completedTransaction.amountPaid.toFixed(2)}</div>
-								</div>
-							</div>
 						</section>
-					) : session ? (
+
 						<section
 							style={{
-								borderRadius: 12,
+								borderRadius: 14,
 								padding: 12,
-								background: "#ffffff",
-								border: "1px solid #e6eef0",
-								display: "grid",
-								gap: 8,
+								background: "linear-gradient(150deg, #ffffff 0%, #f8fafc 100%)",
+								border: "1px solid #dbe7f0",
+								boxShadow: "0 8px 18px rgba(15, 23, 42, 0.06)",
 								flex: 1,
 								minHeight: 0,
 								overflow: "hidden",
+								display: "flex",
+								flexDirection: "column",
 							}}
 						>
-							<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-								<h2 style={{ margin: 0, fontSize: 16 }}>Payment</h2>
-								<div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-									<div style={{ fontSize: 11, color: "#64748b", maxWidth: 110, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{session.facilityName}</div>
-									<div
-										style={{
-											padding: "4px 8px",
-											borderRadius: 999,
-											background: session.status.toLowerCase() === "paid" ? "#dcfce7" : "#eef2ff",
-											color: session.status.toLowerCase() === "paid" ? "#166534" : "#3730a3",
-											fontWeight: 700,
-											fontSize: 11,
-										}}
-									>
-										{session.status.toUpperCase()}
-									</div>
-								</div>
-							</div>
-
-							<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-								<div style={{ padding: "8px 7px", borderRadius: 8, background: "#fafafa", border: "1px solid #eef2f7" }}>
-									<div style={{ fontSize: 10, color: "#64748b" }}>Due</div>
-									<div style={{ fontWeight: 900, fontSize: 16, color: "#0f766e" }}>PHP {session.amountDue.toFixed(2)}</div>
-								</div>
-								<div style={{ padding: "8px 7px", borderRadius: 8, background: "#fff7ed", border: "1px solid #ffedd5" }}>
-									<div style={{ fontSize: 10, color: "#92400e" }}>Inserted</div>
-									<div style={{ fontWeight: 900, fontSize: 16, color: "#b45309" }}>PHP {session.amountInserted.toFixed(2)}</div>
-								</div>
-								<div style={{ padding: "8px 7px", borderRadius: 8, background: "#fffaf0", border: "1px solid #fef3c7" }}>
-									<div style={{ fontSize: 10, color: "#92400e" }}>Remaining</div>
-									<div style={{ fontWeight: 900, fontSize: 16, color: "#b45309" }}>PHP {session.remainingAmount.toFixed(2)}</div>
-								</div>
-								<div style={{ padding: "8px 7px", borderRadius: 8, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
-									<div style={{ fontSize: 10, color: "#475569" }}>Total Units</div>
-									<div style={{ fontWeight: 900, fontSize: 16, color: "#0f172a" }}>{session.totalUnits}</div>
-								</div>
-							</div>
-
-							<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-								{[10, 20, 50].map((amt) => (
-									<button
-										key={amt}
-										type="button"
-										onClick={() => handleInsertAmount(amt)}
-										disabled={isPaymentActionLoading}
-										style={{
-											height: 46,
-											borderRadius: 10,
-											border: "1px solid #cbd5e1",
-											background: "#ffffff",
-											cursor: isPaymentActionLoading ? "not-allowed" : "pointer",
-											fontWeight: 800,
-											fontSize: 15,
-										}}
-									>
-										{isInserting === amt ? `Inserting ${amt}...` : `Insert ${amt}`}
-									</button>
-								))}
-							</div>
-
-							<div style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: 8 }}>
+							<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0, gap: 8 }}>
+								<h2 style={{ margin: 0, fontSize: 16, color: "#1e293b" }}>Categories</h2>
 								<button
 									type="button"
-									onClick={handleCompletePayment}
-									disabled={!canComplete || isPaymentActionLoading}
+									onClick={handleClear}
+									disabled={!selectedFacility}
 									style={{
-										height: 50,
-										borderRadius: 10,
-										border: "none",
-										background: canComplete ? "#059669" : "#cbd5e1",
-										color: canComplete ? "#ffffff" : "#334155",
-										cursor: canComplete && !isPaymentActionLoading ? "pointer" : "not-allowed",
-										fontWeight: 900,
-										fontSize: 16,
-									}}
-								>
-									{isCompleting ? "Completing..." : "Complete Payment"}
-								</button>
-
-								<button
-									type="button"
-									onClick={handleCancelSession}
-									disabled={isPaymentActionLoading}
-									style={{
-										height: 50,
+										padding: "8px 14px",
 										borderRadius: 10,
 										border: "1px solid #cbd5e1",
 										background: "#ffffff",
-										cursor: isPaymentActionLoading ? "not-allowed" : "pointer",
+										cursor: selectedFacility ? "pointer" : "not-allowed",
 										fontWeight: 700,
-										fontSize: 14,
+										fontSize: 13,
+										height: 36,
 									}}
 								>
-									Cancel
+									Clear
 								</button>
 							</div>
+
+							{!selectedFacility ? (
+								<div style={{ marginTop: 10, color: "#64748b", fontSize: 13 }}>Choose a facility to show categories.</div>
+							) : (
+								<div
+									style={{
+										marginTop: 8,
+										display: "grid",
+										gridTemplateColumns: selectedFacility.categories.length >= 3 ? "1fr 1fr" : "1fr",
+										gap: 8,
+										alignContent: "start",
+										flex: 1,
+										minHeight: 0,
+										overflow: "hidden",
+									}}
+								>
+									{selectedFacility.categories.map((category) => {
+										const quantity = selection.quantities[category.code] ?? 0;
+
+										return (
+											<div
+												key={category.code}
+												style={{
+													display: "flex",
+													alignItems: "center",
+													gap: 6,
+													padding: "8px 9px",
+													borderRadius: 12,
+													border: "1px solid #dbe7f0",
+													background: "linear-gradient(145deg, #ffffff 0%, #f8fafc 100%)",
+													minHeight: 72,
+													boxShadow: "0 6px 12px rgba(15, 23, 42, 0.06)",
+												}}
+											>
+												<div style={{ flex: 1, minWidth: 0 }}>
+													<div
+														style={{
+															fontWeight: 800,
+															fontSize: 14,
+															lineHeight: 1.2,
+															color: "#0f172a",
+															whiteSpace: "nowrap",
+															overflow: "hidden",
+															textOverflow: "ellipsis",
+														}}
+													>
+														{formatCategoryLabel(category.code)}
+													</div>
+													<div style={{ fontSize: 12, color: "#475569", marginTop: 3 }}>PHP {category.price.toFixed(2)} each</div>
+												</div>
+
+												<div style={{ display: "flex", gap: 7, alignItems: "center", flexShrink: 0 }}>
+													<button
+														type="button"
+														onClick={() => handleChangeQuantity(category.code, -1)}
+														aria-label={`Decrease ${category.code}`}
+														style={{
+															width: 40,
+															height: 40,
+															borderRadius: 10,
+															border: "1px solid #cbd5e1",
+															background: "#fff",
+															fontSize: 22,
+															cursor: "pointer",
+															display: "flex",
+															alignItems: "center",
+															justifyContent: "center",
+															lineHeight: 1,
+														}}
+													>
+														-
+													</button>
+
+													<div style={{ minWidth: 28, textAlign: "center", fontWeight: 900, fontSize: 20, color: "#0f172a" }}>
+														{quantity}
+													</div>
+
+													<button
+														type="button"
+														onClick={() => handleChangeQuantity(category.code, 1)}
+														aria-label={`Increase ${category.code}`}
+														style={{
+															width: 40,
+															height: 40,
+															borderRadius: 10,
+															border: "1px solid #0284c7",
+															background: "linear-gradient(145deg, #0ea5e9 0%, #0284c7 100%)",
+															color: "#ffffff",
+															fontSize: 20,
+															cursor: "pointer",
+															display: "flex",
+															alignItems: "center",
+															justifyContent: "center",
+															lineHeight: 1,
+														}}
+													>
+														+
+													</button>
+												</div>
+											</div>
+										);
+									})}
+								</div>
+							)}
 						</section>
-					) : (
+					</div>
+
+					<div style={{ flex: "0 0 39%", minWidth: 0, display: "flex", flexDirection: "column", gap: 10, overflow: "hidden" }}>
 						<section
 							style={{
-								borderRadius: 12,
+								borderRadius: 14,
 								padding: 12,
-								background: "#ffffff",
-								border: "1px dashed #cbd5e1",
-								display: "flex",
-								alignItems: "center",
-								justifyContent: "center",
-								color: "#64748b",
-								fontSize: 13,
-								flex: 1,
-								minHeight: 0,
+								background: "linear-gradient(145deg, #ffffff 0%, #f8fafc 100%)",
+								border: "1px solid #dbe7f0",
+								boxShadow: "0 8px 18px rgba(15, 23, 42, 0.07)",
+								display: "grid",
+								gap: 10,
+								flexShrink: 0,
 							}}
 						>
-							Payment panel will appear after pressing Proceed.
+							<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+								<div>
+									<div style={{ fontSize: 11, color: "#64748b", fontWeight: 700 }}>Total Units</div>
+									<div style={{ fontWeight: 900, fontSize: 22, color: "#0f172a" }}>{totalUnits}</div>
+								</div>
+								<div style={{ textAlign: "right" }}>
+									<div style={{ fontSize: 11, color: "#64748b", fontWeight: 700 }}>Total Amount</div>
+									<div style={{ fontWeight: 900, fontSize: 24, color: "#0f766e" }}>PHP {totalAmount.toFixed(2)}</div>
+								</div>
+							</div>
+
+							<button
+								type="button"
+								onClick={handleStartSession}
+								disabled={!canProceed}
+								style={{
+									height: 52,
+									padding: "10px 14px",
+									borderRadius: 12,
+									border: "none",
+									background: canProceed
+										? "linear-gradient(145deg, #0ea5e9 0%, #0369a1 100%)"
+										: "#cbd5e1",
+									color: canProceed ? "#ffffff" : "#334155",
+									cursor: canProceed ? "pointer" : "not-allowed",
+									fontWeight: 800,
+									fontSize: 17,
+								}}
+							>
+								{isStarting ? "Starting..." : "Proceed"}
+							</button>
 						</section>
-					)}
+
+						{completedTransaction ? (
+							<section
+								style={{
+									borderRadius: 14,
+									padding: 12,
+									background: "linear-gradient(145deg, #ecfdf5 0%, #f0fdf4 100%)",
+									border: "1px solid #bbf7d0",
+									display: "grid",
+									gap: 8,
+									flex: 1,
+									minHeight: 0,
+								}}
+							>
+								<div style={{ fontSize: 12, color: "#065f46", fontWeight: 700 }}>Payment Completed</div>
+								<div style={{ fontWeight: 900, fontSize: 20, color: "#065f46", lineHeight: 1.1 }}>{completedTransaction.ticketLabel}</div>
+								<div style={{ fontWeight: 700, fontSize: 13, color: "#065f46" }}>ID: {completedTransaction.transactionId}</div>
+
+								<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 2 }}>
+									<div style={{ padding: 10, borderRadius: 8, background: "#fff", border: "1px solid #e6eef0" }}>
+										<div style={{ fontSize: 11, color: "#64748b" }}>Amount Due</div>
+										<div style={{ fontWeight: 800, fontSize: 17 }}>PHP {completedTransaction.amountDue.toFixed(2)}</div>
+									</div>
+									<div style={{ padding: 10, borderRadius: 8, background: "#fff", border: "1px solid #e6eef0" }}>
+										<div style={{ fontSize: 11, color: "#64748b" }}>Amount Paid</div>
+										<div style={{ fontWeight: 800, fontSize: 17 }}>PHP {completedTransaction.amountPaid.toFixed(2)}</div>
+									</div>
+								</div>
+							</section>
+						) : session ? (
+							<section
+								style={{
+									borderRadius: 14,
+									padding: 12,
+									background: "linear-gradient(150deg, #ffffff 0%, #f8fafc 100%)",
+									border: "1px solid #dbe7f0",
+									boxShadow: "0 8px 18px rgba(15, 23, 42, 0.06)",
+									display: "grid",
+									gap: 8,
+									flex: 1,
+									minHeight: 0,
+									overflow: "hidden",
+								}}
+							>
+								<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+									<h2 style={{ margin: 0, fontSize: 16, color: "#1e293b" }}>Payment</h2>
+									<div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+										<div style={{ fontSize: 11, color: "#64748b", maxWidth: 110, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{session.facilityName}</div>
+										<div
+											style={{
+												padding: "4px 8px",
+												borderRadius: 999,
+												background: session.status.toLowerCase() === "paid" ? "#dcfce7" : "#eef2ff",
+												color: session.status.toLowerCase() === "paid" ? "#166534" : "#3730a3",
+												fontWeight: 700,
+												fontSize: 11,
+											}}
+										>
+											{session.status.toUpperCase()}
+										</div>
+									</div>
+								</div>
+
+								<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+									<div style={{ padding: "8px 7px", borderRadius: 10, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+										<div style={{ fontSize: 10, color: "#64748b" }}>Due</div>
+										<div style={{ fontWeight: 900, fontSize: 16, color: "#0f766e" }}>PHP {session.amountDue.toFixed(2)}</div>
+									</div>
+									<div style={{ padding: "8px 7px", borderRadius: 10, background: "#fff7ed", border: "1px solid #ffedd5" }}>
+										<div style={{ fontSize: 10, color: "#92400e" }}>Inserted</div>
+										<div style={{ fontWeight: 900, fontSize: 16, color: "#b45309" }}>PHP {session.amountInserted.toFixed(2)}</div>
+									</div>
+									<div style={{ padding: "8px 7px", borderRadius: 10, background: "#fffaf0", border: "1px solid #fef3c7" }}>
+										<div style={{ fontSize: 10, color: "#92400e" }}>Remaining</div>
+										<div style={{ fontWeight: 900, fontSize: 16, color: "#b45309" }}>PHP {session.remainingAmount.toFixed(2)}</div>
+									</div>
+									<div style={{ padding: "8px 7px", borderRadius: 10, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+										<div style={{ fontSize: 10, color: "#475569" }}>Total Units</div>
+										<div style={{ fontWeight: 900, fontSize: 16, color: "#0f172a" }}>{session.totalUnits}</div>
+									</div>
+								</div>
+
+								<div
+									style={{
+										padding: "10px 12px",
+										borderRadius: 12,
+										background: "#f8fafc",
+										border: "1px solid #e2e8f0",
+										display: "grid",
+										gap: 4,
+									}}
+								>
+									<div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>Please insert exact amount</div>
+									<div style={{ fontSize: 12, color: "#475569" }}>Waiting for coin or bill acceptor input</div>
+								</div>
+
+								<div style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: 8 }}>
+									<button
+										type="button"
+										onClick={handleCompletePayment}
+										disabled={!canComplete || isPaymentActionLoading}
+										style={{
+											height: 50,
+											borderRadius: 12,
+											border: "none",
+											background: canComplete
+												? "linear-gradient(145deg, #10b981 0%, #059669 100%)"
+												: "#cbd5e1",
+											color: canComplete ? "#ffffff" : "#334155",
+											cursor: canComplete && !isPaymentActionLoading ? "pointer" : "not-allowed",
+											fontWeight: 900,
+											fontSize: 16,
+										}}
+									>
+										{isCompleting ? "Completing..." : "Complete Payment"}
+									</button>
+
+									<button
+										type="button"
+										onClick={handleCancelSession}
+										disabled={isPaymentActionLoading}
+										style={{
+											height: 50,
+											borderRadius: 12,
+											border: "1px solid #cbd5e1",
+											background: "#ffffff",
+											cursor: isPaymentActionLoading ? "not-allowed" : "pointer",
+											fontWeight: 700,
+											fontSize: 14,
+										}}
+									>
+										Cancel
+									</button>
+								</div>
+							</section>
+						) : (
+							<section
+								style={{
+									borderRadius: 14,
+									padding: 12,
+									background: "linear-gradient(150deg, #ffffff 0%, #f8fafc 100%)",
+									border: "1px dashed #cbd5e1",
+									display: "flex",
+									alignItems: "center",
+									justifyContent: "center",
+									color: "#64748b",
+									fontSize: 14,
+									fontWeight: 600,
+									flex: 1,
+									minHeight: 0,
+								}}
+							>
+								Payment panel will appear after pressing Proceed.
+							</section>
+						)}
+					</div>
 				</div>
 			</div>
 		</div>

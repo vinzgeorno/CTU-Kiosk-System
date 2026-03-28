@@ -54,16 +54,56 @@ COIN_DEBOUNCE_MS = 50
 COIN_MIN_PULSE_WIDTH = 0.02  # 20ms minimum pulse width to filter noise
 
 PULSE_TO_VALUE = {
-    1: 1,      # 1 pulse = ₱1
-    5: 5,      # 5 pulses = ₱5
-    10: 10,    # 10 pulses = ₱10
-    20: 20,    # 20 pulses = ₱20
-    4: 5,      # 4 pulses = ₱5 gj(old 5 PHP coin variant)
-    6: 5,      # 6 pulses = ₱5 (old 5 PHP coin variant)
-    9: 10,     # 9 pulses = ₱10 (old 10 PHP coin variant)
-    11: 10,    # 11 pulses = ₱10 (old 10 PHP coin variant)
-    19: 20,    # 19 pulses = ₱20 (old 20 PHP coin variant)
-    21: 20     # 21 pulses = ₱20 (old 20 PHP coin variant)
+    1: 1,
+    2: 2,
+    3: 3,
+    4: 4,
+    5: 5,
+    6: 6,
+    7: 7,
+    8: 8,
+    9: 9,
+    10: 10,
+    11: 11,
+    12: 12,
+    13: 13,
+    14: 14,
+    15: 15,
+    16: 16,
+    17: 17,
+    18: 18,
+    19: 19,
+    20: 20,
+    21: 21,
+    22: 22,
+    23: 23,
+    24: 24,
+    25: 25,
+    26: 26,
+    27: 27,
+    28: 28,
+    29: 29,
+    30: 30,
+    31: 31,
+    32: 32,
+    33: 33,
+    34: 34,
+    35: 35,
+    36: 36,
+    37: 37,
+    38: 38,
+    39: 39,
+    40: 40,
+    41: 41,
+    42: 42,
+    43: 43,
+    44: 44,
+    45: 45,
+    46: 46,
+    47: 47,
+    48: 48,
+    49: 49,
+    50: 50,
 }
 
 # ── Bill config ───────────────────────────────────────────────────
@@ -76,9 +116,17 @@ BILL_MIN_PULSE_WIDTH = 0.02  # 20ms minimum pulse width to filter noise
 # Bill denominations and their typical pulse counts (for rounding to closest value)
 BILL_DENOMINATIONS = {
     10: 1,      # ₱10 = 1 pulse
-    20: 2,      # ₱20 = 2 pulses
-    50: 5,      # ₱50 = 5 pulses
-    100: 10     # ₱100 = 10 pulses
+    20: 2,     
+    50: 5,      
+    100: 10,     
+    150: 15,
+    200: 20,
+    250: 25,
+    300: 30,
+    350: 35,
+    400: 40,
+    450: 45,
+    500: 50,
 }
 
 # ── DEBUG: Track all pulses received ───────────────────────────────
