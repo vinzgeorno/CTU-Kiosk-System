@@ -11,6 +11,7 @@ import time
 import signal
 import sys
 import json
+import requests
 import paho.mqtt.client as mqtt
 import os
 import subprocess
@@ -27,6 +28,9 @@ PORT = 1883
 TOPIC_BILL = 'ctu-kiosk/payment/bill'
 TOPIC_COIN = 'ctu-kiosk/payment/coin'
 TOPIC_DISPENSE = 'ctu-kiosk/payment/dispense'
+
+# ── Backend HTTP config ───────────────────────────────────────────
+BACKEND_INSERT_URL = os.getenv("BACKEND_INSERT_URL", "http://localhost:3000/payment-session/insert")
 
 # ── Servo config (Change Dispenser) ────────────────────────────────
 SERVO_REST_ANGLE = 0       # Rest position (no dispensing)
@@ -347,6 +351,7 @@ def publish_coin_event(mqtt_client, pulses):
     credit += value
     timestamp = time.strftime('%H:%M:%S', time.localtime())
     print(f"\n✅ [{timestamp}] COIN COMPLETE: {pulses} pulses → ₱{value} (Total: ₱{credit})\n")
+    send_payment_to_backend(value)
     
     payload = json.dumps({
         "pulses": pulses,
@@ -382,6 +387,7 @@ def publish_bill_event(mqtt_client, pulses):
     credit += added
     timestamp = time.strftime('%H:%M:%S', time.localtime())
     print(f"\n✅ [{timestamp}] BILL COMPLETE: {pulses} pulses → ₱{added} (Total: ₱{credit})\n")
+    send_payment_to_backend(added)
     
     payload = json.dumps({
         "pulses": pulses,
@@ -392,6 +398,20 @@ def publish_bill_event(mqtt_client, pulses):
     })
     
     mqtt_client.publish(TOPIC_BILL, payload)
+
+
+def send_payment_to_backend(amount):
+    """Send finalized payment amount to backend for real-time session updates."""
+    try:
+        response = requests.post(
+            BACKEND_INSERT_URL,
+            json={"amount": amount},
+            timeout=2,
+        )
+        response.raise_for_status()
+        print(f"🌐 [HTTP] Inserted payment amount ₱{amount}")
+    except Exception as e:
+        print(f"⚠️  [HTTP] Insert failed for ₱{amount}: {e}")
 
 
 # ── Main Processing Loop ──────────────────────────────────────────
@@ -462,7 +482,7 @@ def main():
             GPIO.add_event_detect(COIN_PIN, GPIO.FALLING,
                                 callback=coin_pulse_callback,
                                 bouncetime=COIN_DEBOUNCE_MS)
-            GPIO.add_event_detect(BILL_PIN, GPIO.FALLING,
+            GPIO.add_event_detect(BILL_PIN, GPIO.RISING,
                                 callback=bill_pulse_callback,
                                 bouncetime=BILL_DEBOUNCE_MS)
             gpio_available = True
