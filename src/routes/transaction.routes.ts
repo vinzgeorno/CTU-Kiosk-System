@@ -1,4 +1,6 @@
 import { db } from "../db/sqlite";
+import { PaymentEventsRepository } from "../db/payment-events.repository";
+import { SessionLogsRepository } from "../db/session-logs.repository";
 import { TicketCounterRepository } from "../db/ticket-counter.repository";
 import { TransactionRepository } from "../db/transaction.repository";
 import { mapTransactionToPrintableTicketData } from "../printing/printer.mapper";
@@ -74,6 +76,8 @@ export default async function transactionRoutes(fastify: any) {
 		ticketCounterRepository
 	);
 	const transactionRepository = new TransactionRepository(db);
+	const paymentEventsRepository = new PaymentEventsRepository(db);
+	const sessionLogsRepository = new SessionLogsRepository(db);
 	const printerService = new PrinterService();
 	const processTransactionService = new ProcessTransactionService(
 		transactionRecordBuilderService,
@@ -145,6 +149,18 @@ export default async function transactionRoutes(fastify: any) {
 					updatedAt: nowIso,
 				});
 
+				sessionLogsRepository.createSessionLog({
+					sessionId: paymentSession.id,
+					facilityCode: paymentSession.facilityCode,
+					facilityName: paymentSession.facilityName,
+					amountDue: paymentSession.amountDue,
+					amountInserted: 0,
+					totalUnits: paymentSession.totalUnits,
+					status: "awaiting_payment",
+					startedAt: paymentSession.createdAt,
+					lastUpdatedAt: paymentSession.updatedAt,
+				});
+
 				return {
 					success: true,
 					session: paymentSession,
@@ -212,6 +228,14 @@ export default async function transactionRoutes(fastify: any) {
 					});
 				}
 
+				paymentEventsRepository.createPaymentEvent({
+					sessionId: currentSession.id,
+					source: "manual_test",
+					amount: body.amount,
+					pulseCount: 0,
+					recordedAt: new Date().toISOString(),
+				});
+
 				const newAmountInserted = currentSession.amountInserted + body.amount;
 				const nextStatus =
 					newAmountInserted >= currentSession.amountDue ? "paid" : "awaiting_payment";
@@ -219,6 +243,11 @@ export default async function transactionRoutes(fastify: any) {
 				const updatedSession = paymentSessionStore.update({
 					amountInserted: newAmountInserted,
 					status: nextStatus,
+				});
+
+				sessionLogsRepository.updateSessionLog(updatedSession.id, {
+					amountInserted: updatedSession.amountInserted,
+					status: updatedSession.status,
 				});
 
 				return {
@@ -268,9 +297,17 @@ export default async function transactionRoutes(fastify: any) {
 					quantities,
 					amountPaid: currentSession.amountInserted,
 					createdAt: currentSession.createdAt,
+					sessionId: currentSession.id,
+					startedAt: currentSession.createdAt,
+					sourceMode: "hardware_live",
 				});
 
 				paymentSessionStore.update({ status: "completed" });
+				sessionLogsRepository.markCompleted(
+					currentSession.id,
+					result.transactionId,
+					currentSession.amountInserted
+				);
 				paymentSessionStore.clear();
 
 				return {
@@ -281,6 +318,35 @@ export default async function transactionRoutes(fastify: any) {
 					amountDue: result.record.amountDue,
 					amountPaid: result.record.amountPaid,
 					printResult: result.printResult,
+				};
+			} catch (error) {
+				return reply.status(500).send({
+					success: false,
+					message: error instanceof Error ? error.message : "Unknown error",
+				});
+			}
+		}
+	);
+
+	fastify.post(
+		"/payment-session/cancel",
+		async (_request: any, reply: any) => {
+			try {
+				const session = paymentSessionStore.getCurrent();
+
+				if (!session) {
+					return reply.status(400).send({
+						success: false,
+						message: "No active payment session",
+					});
+				}
+
+				paymentSessionStore.update({ status: "cancelled" });
+				sessionLogsRepository.markCancelled(session.id, session.amountInserted);
+				paymentSessionStore.clear();
+
+				return {
+					success: true,
 				};
 			} catch (error) {
 				return reply.status(500).send({

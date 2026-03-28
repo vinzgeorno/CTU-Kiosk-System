@@ -8,6 +8,9 @@ export type CreateTransactionRecordInput = {
 	facilityCode: FacilityCode;
 	quantities: Record<string, number>;
 	amountPaid: number;
+	sessionId?: string;
+	startedAt?: string;
+	sourceMode?: string;
 	createdAt?: string;
 };
 
@@ -68,6 +71,17 @@ export class TransactionRecordBuilderService {
 			throw new Error("createdAt must be a valid ISO date string.");
 		}
 
+		const startedAt = input.startedAt ?? createdAt;
+		if (Number.isNaN(Date.parse(startedAt))) {
+			throw new Error("startedAt must be a valid ISO date string.");
+		}
+
+		const completedAt = createdAt ?? new Date().toISOString();
+		const durationMs =
+			!Number.isNaN(Date.parse(startedAt)) && !Number.isNaN(Date.parse(completedAt))
+				? Math.max(0, Date.parse(completedAt) - Date.parse(startedAt))
+				: undefined;
+
 		return {
 			facilityCode: input.facilityCode,
 			facilityName: details.facilityName,
@@ -78,6 +92,15 @@ export class TransactionRecordBuilderService {
 			totalUnits: details.totalUnits,
 			amountDue: details.amountDue,
 			amountPaid: input.amountPaid,
+			sessionId: input.sessionId,
+			startedAt,
+			completedAt,
+			durationMs,
+			paymentStatus: "completed",
+			printStatus: "pending",
+			printAttempts: 0,
+			sourceMode: input.sourceMode ?? "hardware_live",
+			errorMessage: null,
 			breakdown: details.breakdown,
 			createdAt,
 		};

@@ -18,6 +18,15 @@ export type TransactionRecord = {
   totalUnits: number;
   amountDue: number;
   amountPaid: number;
+  sessionId?: string;
+  startedAt?: string;
+  completedAt?: string;
+  durationMs?: number;
+  paymentStatus?: string;
+  printStatus?: string;
+  printAttempts?: number;
+  sourceMode?: string;
+  errorMessage?: string | null;
   breakdown: TransactionBreakdownItem[];
   createdAt: string;
 };

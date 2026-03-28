@@ -6,10 +6,16 @@ import { paymentSessionStore } from "./hardware/shared-payment-session";
 import healthRoutes from "./routes/health.routes";
 import transactionRoutes from "./routes/transaction.routes";
 import { ApplyPaymentEventService } from "./services/apply-payment-event.service";
+import { PaymentEventsRepository } from "./db/payment-events.repository";
 
 const app = Fastify();
 
-const applyPaymentEventService = new ApplyPaymentEventService(paymentSessionStore);
+const paymentEventsRepository = new PaymentEventsRepository();
+
+const applyPaymentEventService = new ApplyPaymentEventService(
+	paymentSessionStore,
+	paymentEventsRepository
+);
 
 const mqttBrokerUrl = env.MQTT_BROKER_URL;
 const mqttPaymentTopic = env.MQTT_PAYMENT_TOPIC;

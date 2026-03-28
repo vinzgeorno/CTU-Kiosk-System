@@ -10,6 +10,9 @@ export type ProcessTransactionInput = {
   quantities: Record<string, number>;
   amountPaid: number;
   createdAt?: string;
+  sessionId?: string;
+  startedAt?: string;
+  sourceMode?: string;
 };
 
 export type ProcessTransactionResult = {

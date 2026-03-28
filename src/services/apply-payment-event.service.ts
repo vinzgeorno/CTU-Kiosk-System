@@ -1,3 +1,4 @@
+import { PaymentEventsRepository } from "../db/payment-events.repository";
 import { HardwarePaymentEvent } from "../hardware/hardware.types";
 import { PaymentSessionStore } from "../hardware/payment-session.store";
 
@@ -8,7 +9,10 @@ export type ApplyPaymentEventResult = {
 };
 
 export class ApplyPaymentEventService {
-	constructor(private readonly paymentSessionStore: PaymentSessionStore) {}
+	constructor(
+		private readonly paymentSessionStore: PaymentSessionStore,
+		private readonly paymentEventsRepository: PaymentEventsRepository
+	) {}
 
 	apply(event: HardwarePaymentEvent): ApplyPaymentEventResult {
 		const currentSession = this.paymentSessionStore.getCurrent();
@@ -44,6 +48,14 @@ export class ApplyPaymentEventService {
 				session: currentSession,
 			};
 		}
+
+		this.paymentEventsRepository.createPaymentEvent({
+			sessionId: currentSession.id,
+			source: event.source,
+			amount: event.amount,
+			pulseCount: event.pulseCount,
+			recordedAt: event.timestamp ?? new Date().toISOString(),
+		});
 
 		const newAmountInserted = currentSession.amountInserted + event.amount;
 		const updatedSession = this.paymentSessionStore.update({

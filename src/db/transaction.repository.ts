@@ -18,9 +18,18 @@ export class TransactionRepository {
 					total_units,
 					amount_due,
 					amount_paid,
+					session_id,
+					started_at,
+					completed_at,
+					duration_ms,
+					payment_status,
+					print_status,
+					print_attempts,
+					source_mode,
+					error_message,
 					created_at
 				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`
 		);
 
@@ -49,6 +58,15 @@ export class TransactionRepository {
 				input.totalUnits,
 				input.amountDue,
 				input.amountPaid,
+				input.sessionId ?? null,
+				input.startedAt ?? null,
+				input.completedAt ?? null,
+				input.durationMs ?? null,
+				input.paymentStatus ?? "completed",
+				input.printStatus ?? "printed",
+				input.printAttempts ?? 1,
+				input.sourceMode ?? "hardware_live",
+				input.errorMessage ?? null,
 				input.createdAt
 			);
 
