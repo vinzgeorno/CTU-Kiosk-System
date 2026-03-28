@@ -87,3 +87,24 @@ export async function reprintTransactionById(id: number) {
         method: "POST",
     });
 }
+
+export async function getTransactionStats() {
+	let response: Response;
+
+	try {
+		response = await fetch(`${API_BASE_URL}/transactions/stats`, {
+			method: "GET",
+		});
+	} catch {
+		throw new Error(`Unable to reach backend at ${API_BASE_URL}`);
+	}
+
+	const data = await response.json().catch(() => null);
+
+	if (!response.ok) {
+		const message = data && typeof data.message === "string" ? data.message : "Request failed";
+		throw new Error(message);
+	}
+
+	return data;
+}

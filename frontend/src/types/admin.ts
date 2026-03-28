@@ -14,3 +14,12 @@ export type TicketCounterRow = {
   last_sequence: number;
   updated_at: string;
 };
+
+export type TransactionStats = {
+  totalTransactions: number;
+  totalAmount: number;
+  totalUnits: number;
+  averageDurationMs: number;
+  fastestDurationMs: number;
+  slowestDurationMs: number;
+};

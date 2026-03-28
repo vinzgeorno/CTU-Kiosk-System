@@ -2,6 +2,15 @@ import Database from "better-sqlite3";
 import { db } from "./sqlite";
 import { TransactionRecord } from "../types/transaction.types";
 
+type TransactionStatsRow = {
+	totalTransactions: number | null;
+	totalAmount: number | null;
+	totalUnits: number | null;
+	averageDurationMs: number | null;
+	fastestDurationMs: number | null;
+	slowestDurationMs: number | null;
+};
+
 export class TransactionRepository {
 	constructor(private readonly database: Database.Database = db) {}
 
@@ -164,6 +173,44 @@ export class TransactionRepository {
 		return {
 			...transactionRow,
 			breakdown,
+		};
+	}
+
+	getTransactionStats() {
+		const statement = this.database.prepare(
+			`
+				SELECT
+					COUNT(*) AS totalTransactions,
+					COALESCE(SUM(amount_paid), 0) AS totalAmount,
+					COALESCE(SUM(total_units), 0) AS totalUnits,
+					COALESCE(AVG(duration_ms), 0) AS averageDurationMs,
+					COALESCE(MIN(duration_ms), 0) AS fastestDurationMs,
+					COALESCE(MAX(duration_ms), 0) AS slowestDurationMs
+				FROM transactions
+				WHERE duration_ms IS NOT NULL
+			`
+		);
+
+		const stats = statement.get() as TransactionStatsRow | undefined;
+
+		if (!stats) {
+			return {
+				totalTransactions: 0,
+				totalAmount: 0,
+				totalUnits: 0,
+				averageDurationMs: 0,
+				fastestDurationMs: 0,
+				slowestDurationMs: 0,
+			};
+		}
+
+		return {
+			totalTransactions: Number(stats.totalTransactions ?? 0),
+			totalAmount: Number(stats.totalAmount ?? 0),
+			totalUnits: Number(stats.totalUnits ?? 0),
+			averageDurationMs: Number(stats.averageDurationMs ?? 0),
+			fastestDurationMs: Number(stats.fastestDurationMs ?? 0),
+			slowestDurationMs: Number(stats.slowestDurationMs ?? 0),
 		};
 	}
 }

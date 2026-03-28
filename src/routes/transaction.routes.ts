@@ -387,6 +387,25 @@ export default async function transactionRoutes(fastify: any) {
 	);
 
 	fastify.get(
+		"/transactions/stats",
+		async (_request: any, reply: any) => {
+			try {
+				const stats = transactionRepository.getTransactionStats();
+
+				return {
+					success: true,
+					stats,
+				};
+			} catch (error) {
+				return reply.status(500).send({
+					success: false,
+					message: error instanceof Error ? error.message : "Unknown error",
+				});
+			}
+		}
+	);
+
+	fastify.get(
 		"/ticket-counters",
 		async (request: any, reply: any) => {
 			try {
