@@ -5,6 +5,7 @@ import { TicketCounterRepository } from "../db/ticket-counter.repository";
 import { TransactionRepository } from "../db/transaction.repository";
 import { mapTransactionToPrintableTicketData } from "../printing/printer.mapper";
 import { PrinterService } from "../printing/printer.service";
+import { SummaryReportPrinterService } from "../printing/summary-report-printer.service";
 import { buildTransactionDetails } from "../services/transaction-builder.service";
 import { ProcessTransactionService } from "../services/process-transaction.service";
 import { TransactionRecordBuilderService } from "../services/transaction-record-builder.service";
@@ -35,6 +36,23 @@ type RecentTransactionsQuery = {
 type FacilitySummaryReportQuery = {
 	startAt?: string;
 	endAt?: string;
+};
+
+type FacilitySummaryReportPrintRow = {
+	facility_code?: unknown;
+	facility_name?: unknown;
+	first_ticket_label?: unknown;
+	last_ticket_label?: unknown;
+	transaction_count?: unknown;
+	total_units?: unknown;
+	total_amount?: unknown;
+};
+
+type FacilitySummaryReportPrintBody = {
+	reportTitle?: unknown;
+	startAt?: unknown;
+	endAt?: unknown;
+	rows?: unknown;
 };
 
 type UpdateTicketCounterParams = {
@@ -85,6 +103,7 @@ export default async function transactionRoutes(fastify: any) {
 	const paymentEventsRepository = new PaymentEventsRepository(db);
 	const sessionLogsRepository = new SessionLogsRepository(db);
 	const printerService = new PrinterService();
+	const summaryReportPrinterService = new SummaryReportPrinterService();
 	const supabaseSyncService = new SupabaseSyncService();
 	const processTransactionService = new ProcessTransactionService(
 		transactionRecordBuilderService,
@@ -439,6 +458,76 @@ export default async function transactionRoutes(fastify: any) {
 				return {
 					success: true,
 					report,
+				};
+			} catch (error) {
+				return reply.status(500).send({
+					success: false,
+					message: error instanceof Error ? error.message : "Unknown error",
+				});
+			}
+		}
+	);
+
+	fastify.post(
+		"/reports/facility-summary/print",
+		async (request: { body: FacilitySummaryReportPrintBody }, reply: any) => {
+			const reportTitle = request.body?.reportTitle;
+			const startAt = request.body?.startAt;
+			const endAt = request.body?.endAt;
+			const rows = request.body?.rows;
+
+			if (typeof reportTitle !== "string" || reportTitle.trim() === "") {
+				return reply.status(400).send({
+					success: false,
+					message: "reportTitle is required and must be a non-empty string.",
+				});
+			}
+
+			if (typeof startAt !== "string" || startAt.trim() === "") {
+				return reply.status(400).send({
+					success: false,
+					message: "startAt is required and must be a non-empty string.",
+				});
+			}
+
+			if (typeof endAt !== "string" || endAt.trim() === "") {
+				return reply.status(400).send({
+					success: false,
+					message: "endAt is required and must be a non-empty string.",
+				});
+			}
+
+			if (!Array.isArray(rows)) {
+				return reply.status(400).send({
+					success: false,
+					message: "rows is required and must be an array.",
+				});
+			}
+
+			try {
+				const typedRows = rows as FacilitySummaryReportPrintRow[];
+				const generatedAt = new Date().toISOString();
+				const grandTotalAmount = typedRows.reduce((sum, row) => sum + Number(row.total_amount ?? 0), 0);
+				const grandTotalUnits = typedRows.reduce((sum, row) => sum + Number(row.total_units ?? 0), 0);
+				const grandTransactionCount = typedRows.reduce(
+					(sum, row) => sum + Number(row.transaction_count ?? 0),
+					0
+				);
+
+				const printResult = await summaryReportPrinterService.printReport({
+					reportTitle,
+					startAt,
+					endAt,
+					generatedAt,
+					rows: typedRows,
+					grandTotalAmount,
+					grandTotalUnits,
+					grandTransactionCount,
+				});
+
+				return {
+					success: true,
+					printResult,
 				};
 			} catch (error) {
 				return reply.status(500).send({
