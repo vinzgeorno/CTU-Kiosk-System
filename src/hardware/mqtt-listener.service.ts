@@ -21,9 +21,13 @@ export class MqttListenerService extends EventEmitter {
 		}
 
 		this.client = mqtt.connect(this.brokerUrl);
+		const paymentBaseTopic = this.paymentTopic.replace(/\/+$/, "");
+		const coinTopic = `${paymentBaseTopic}/coin`;
+		const billTopic = `${paymentBaseTopic}/bill`;
 
 		this.client.on("connect", () => {
-			this.client?.subscribe(this.paymentTopic);
+			this.client?.subscribe(coinTopic);
+			this.client?.subscribe(billTopic);
 
 			if (this.statusTopic) {
 				this.client?.subscribe(this.statusTopic);
@@ -49,6 +53,15 @@ export class MqttListenerService extends EventEmitter {
 				timestamp: new Date().toISOString(),
 			});
 		});
+
+		this.client.on("close", () => {
+			this.emitStatus({
+				status: "disconnected",
+				source: "system",
+				message: "Disconnected from MQTT broker.",
+				timestamp: new Date().toISOString(),
+			});
+		});
 	}
 
 	disconnect(): void {
@@ -67,8 +80,20 @@ export class MqttListenerService extends EventEmitter {
 			return;
 		}
 
-		if (topic === this.paymentTopic) {
-			const paymentEvent = this.toPaymentEvent(parsed);
+		const paymentBaseTopic = this.paymentTopic.replace(/\/+$/, "");
+		const coinTopic = `${paymentBaseTopic}/coin`;
+		const billTopic = `${paymentBaseTopic}/bill`;
+
+		if (topic === coinTopic) {
+			const paymentEvent = this.toCoinPaymentEvent(parsed);
+			if (paymentEvent) {
+				this.emit("payment", paymentEvent);
+			}
+			return;
+		}
+
+		if (topic === billTopic) {
+			const paymentEvent = this.toBillPaymentEvent(parsed);
 			if (paymentEvent) {
 				this.emit("payment", paymentEvent);
 			}
@@ -97,34 +122,54 @@ export class MqttListenerService extends EventEmitter {
 		}
 	}
 
-	private toPaymentEvent(data: AnyRecord): HardwarePaymentEvent | null {
-		const source = data.source;
-		const amount = data.amount;
-		const pulseCount = data.pulseCount;
-		const timestamp = data.timestamp;
-
-		if (source !== "coin" && source !== "bill") {
-			return null;
-		}
-
-		if (typeof amount !== "number" || !Number.isFinite(amount)) {
-			return null;
-		}
-
-		if (typeof pulseCount !== "number" || !Number.isFinite(pulseCount)) {
-			return null;
-		}
-
-		if (typeof timestamp !== "string") {
+	private toCoinPaymentEvent(data: AnyRecord): HardwarePaymentEvent | null {
+		const amount = this.toFiniteNumber(data.value);
+		if (amount === null) {
 			return null;
 		}
 
 		return {
-			source,
+			source: "coin",
 			amount,
-			pulseCount,
-			timestamp,
+			pulseCount: this.toOptionalFiniteNumber(data.pulses) ?? 0,
+			timestamp:
+				typeof data.timestamp === "string"
+					? data.timestamp
+					: new Date().toISOString(),
 		};
+	}
+
+	private toBillPaymentEvent(data: AnyRecord): HardwarePaymentEvent | null {
+		const amount = this.toFiniteNumber(data.amount);
+		if (amount === null) {
+			return null;
+		}
+
+		return {
+			source: "bill",
+			amount,
+			pulseCount: this.toOptionalFiniteNumber(data.pulses) ?? 0,
+			timestamp:
+				typeof data.timestamp === "string"
+					? data.timestamp
+					: new Date().toISOString(),
+		};
+	}
+
+	private toFiniteNumber(value: unknown): number | null {
+		if (typeof value !== "number" || !Number.isFinite(value)) {
+			return null;
+		}
+
+		return value;
+	}
+
+	private toOptionalFiniteNumber(value: unknown): number | null {
+		if (value === undefined || value === null) {
+			return null;
+		}
+
+		return this.toFiniteNumber(value);
 	}
 
 	private toStatusEvent(data: AnyRecord): HardwareStatusEvent | null {

@@ -1,13 +1,13 @@
 import { db } from "../db/sqlite";
 import { TicketCounterRepository } from "../db/ticket-counter.repository";
 import { TransactionRepository } from "../db/transaction.repository";
-import { paymentSessionStore } from "../hardware/shared-payment-session";
 import { mapTransactionToPrintableTicketData } from "../printing/printer.mapper";
 import { PrinterService } from "../printing/printer.service";
 import { buildTransactionDetails } from "../services/transaction-builder.service";
 import { ProcessTransactionService } from "../services/process-transaction.service";
 import { TransactionRecordBuilderService } from "../services/transaction-record-builder.service";
 import { TransactionRecord } from "../types/transaction.types";
+import { paymentSessionStore } from "../hardware/shared-payment-session";
 
 type CreateTransactionRequestBody = {
 	facilityCode: string;
