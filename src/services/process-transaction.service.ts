@@ -4,6 +4,7 @@ import { mapTransactionToPrintableTicketData } from "../printing/printer.mapper"
 import { PrinterService } from "../printing/printer.service";
 import { TransactionRecord } from "../types/transaction.types";
 import { TransactionRecordBuilderService } from "./transaction-record-builder.service";
+import { SupabaseSyncService } from "./supabase-sync.service";
 
 export type ProcessTransactionInput = {
   facilityCode: FacilityCode;
@@ -25,7 +26,8 @@ export class ProcessTransactionService {
   constructor(
     private readonly recordBuilder: TransactionRecordBuilderService,
     private readonly transactionRepository: TransactionRepository,
-    private readonly printerService: PrinterService
+    private readonly printerService: PrinterService,
+    private readonly supabaseSyncService: SupabaseSyncService
   ) {}
 
   async process(input: ProcessTransactionInput): Promise<ProcessTransactionResult> {
@@ -64,6 +66,17 @@ export class ProcessTransactionService {
         `Failed to print ticket for transaction ${transactionId}: ${
           error instanceof Error ? error.message : "Unknown error"
         }`
+      );
+    }
+
+    // Attempt to sync the saved transaction to Supabase.
+    // Failures here must not affect the successful local transaction flow.
+    try {
+      await this.supabaseSyncService.syncTransactionWithBreakdown(record, transactionId);
+    } catch (syncError) {
+      console.error(
+        `[Supabase Sync] Failed to sync transaction ${transactionId}:`,
+        syncError instanceof Error ? syncError.message : syncError
       );
     }
 

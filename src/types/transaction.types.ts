@@ -30,3 +30,20 @@ export type TransactionRecord = {
   breakdown: TransactionBreakdownItem[];
   createdAt: string;
 };
+
+// Optional helper types for mapping to database / remote rows.
+// These extend the existing shapes but are not used to remove or change
+// any fields on the core types above.
+export type TransactionBreakdownRow = TransactionBreakdownItem & {
+  id?: number;
+  transaction_id?: string | null;
+  local_transaction_id?: string | null;
+};
+
+export type TransactionRecordRow = Omit<TransactionRecord, "breakdown"> & {
+  id?: number;
+  transaction_id?: string | null;
+  local_transaction_id?: string | null;
+  // keep breakdown present here as well when mapping joined rows
+  breakdown?: TransactionBreakdownRow[];
+};

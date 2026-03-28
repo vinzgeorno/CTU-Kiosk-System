@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { facilities } from "../data/facilities";
 import {
 	getRecentTransactions,
 	getTicketCounters,
@@ -126,10 +127,42 @@ const emptyStateStyle: React.CSSProperties = {
 	lineHeight: 1.5,
 };
 
+type DisplayTicketCounterRow = TicketCounterRow & {
+	facility_name: string;
+	ticket_preview: string;
+};
+
+const buildTicketPreview = (facilityCode: string, lastSequence: number) => {
+	const monthCode = String(new Date().getMonth() + 1).padStart(2, "0");
+	const nextSequence = String(Math.max(lastSequence, 0) + 1).padStart(4, "0");
+
+	return `${facilityCode}-${monthCode}-${nextSequence}`;
+};
+
+const mergeCounterRows = (backendCounters: TicketCounterRow[]): DisplayTicketCounterRow[] => {
+	const backendCounterMap = new Map(
+		backendCounters.map((counter) => [counter.facility_code, counter])
+	);
+
+	return facilities.map((facility) => {
+		const backendCounter = backendCounterMap.get(facility.code);
+		const lastSequence = backendCounter?.last_sequence ?? 0;
+		const updatedAt = backendCounter?.updated_at ?? "-";
+
+		return {
+			facility_code: facility.code,
+			facility_name: facility.name,
+			last_sequence: lastSequence,
+			updated_at: updatedAt,
+			ticket_preview: buildTicketPreview(facility.code, lastSequence),
+		};
+	});
+};
+
 export default function AdminPage() {
 	const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
 	const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([]);
-	const [ticketCounters, setTicketCounters] = useState<TicketCounterRow[]>([]);
+	const [ticketCounters, setTicketCounters] = useState<DisplayTicketCounterRow[]>([]);
 	const [transactionStats, setTransactionStats] = useState<TransactionStats>(defaultStats);
 	const [isLoading, setIsLoading] = useState(false);
 	const [loadError, setLoadError] = useState<string | null>(null);
@@ -147,10 +180,11 @@ export default function AdminPage() {
 	const loadCounters = async () => {
 		const countersResult = await getTicketCounters();
 		const counters = extractArray<TicketCounterRow>(countersResult, ["data", "counters", "items"]);
+		const mergedCounters = mergeCounterRows(counters);
 
-		setTicketCounters(counters);
+		setTicketCounters(mergedCounters);
 		setCounterInputs(
-			counters.reduce<Record<string, string>>((acc, counter) => {
+			mergedCounters.reduce<Record<string, string>>((acc, counter) => {
 				acc[counter.facility_code] = String(counter.last_sequence);
 				return acc;
 			}, {})
@@ -286,19 +320,21 @@ export default function AdminPage() {
 	};
 
 	const renderDashboard = () => (
-		<div style={{ display: "grid", gap: 18 }}>
+		<div style={{ display: "grid", gap: 14 }}>
 			<div
 				style={{
 					...panelStyle,
+					padding: 16,
+					borderRadius: 16,
 					background: "linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%)",
 					color: "#ffffff",
 				}}
 			>
-				<div style={{ fontSize: 13, letterSpacing: 1.4, textTransform: "uppercase", opacity: 0.75 }}>
+				<div style={{ fontSize: 11, letterSpacing: 1.2, textTransform: "uppercase", opacity: 0.75 }}>
 					Operations Overview
 				</div>
-				<h2 style={{ margin: "10px 0 8px", fontSize: 28 }}>Kiosk Admin Dashboard</h2>
-				<p style={{ margin: 0, maxWidth: 680, lineHeight: 1.5, color: "rgba(255,255,255,0.84)" }}>
+				<h2 style={{ margin: "8px 0 6px", fontSize: 24, lineHeight: 1.1 }}>Kiosk Admin Dashboard</h2>
+				<p style={{ margin: 0, maxWidth: 680, lineHeight: 1.4, fontSize: 13, color: "rgba(255,255,255,0.84)" }}>
 					Monitor transaction volume, payment speed, and ticketing activity from one place.
 				</p>
 			</div>
@@ -306,8 +342,8 @@ export default function AdminPage() {
 			<div
 				style={{
 					display: "grid",
-					gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-					gap: 16,
+					gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+					gap: 12,
 				}}
 			>
 				{[
@@ -318,9 +354,22 @@ export default function AdminPage() {
 					{ label: "Fastest Transaction", value: formatDuration(transactionStats.fastestDurationMs) },
 					{ label: "Slowest Transaction", value: formatDuration(transactionStats.slowestDurationMs) },
 				].map((card) => (
-					<div key={card.label} style={panelStyle}>
-						<div style={{ fontSize: 13, color: "#64748b", marginBottom: 10 }}>{card.label}</div>
-						<div style={{ fontSize: 28, fontWeight: 700, color: "#0f172a" }}>{card.value}</div>
+					<div
+						key={card.label}
+						style={{
+							...panelStyle,
+							padding: 14,
+							borderRadius: 14,
+							minHeight: 108,
+							display: "grid",
+							alignContent: "space-between",
+							gap: 8,
+						}}
+					>
+						<div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.35 }}>{card.label}</div>
+						<div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.1, color: "#0f172a", wordBreak: "break-word" }}>
+							{card.value}
+						</div>
 					</div>
 				))}
 			</div>
@@ -408,7 +457,7 @@ export default function AdminPage() {
 			<div>
 				<h2 style={{ margin: 0, fontSize: 22, color: "#0f172a" }}>Ticket Counters</h2>
 				<p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 14 }}>
-					Review counter positions and update sequences when required.
+					Review all facility counters, preview ticket formats, and update sequences when required.
 				</p>
 			</div>
 
@@ -418,10 +467,12 @@ export default function AdminPage() {
 
 			{!isLoading && !loadError ? (
 				<div style={{ overflowX: "auto" }}>
-					<table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
+					<table style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
 						<thead>
 							<tr>
 								<th style={{ textAlign: "left", padding: "10px 8px", borderBottom: "1px solid #e2e8f0" }}>Facility Code</th>
+								<th style={{ textAlign: "left", padding: "10px 8px", borderBottom: "1px solid #e2e8f0" }}>Facility</th>
+								<th style={{ textAlign: "left", padding: "10px 8px", borderBottom: "1px solid #e2e8f0" }}>Ticket Preview</th>
 								<th style={{ textAlign: "left", padding: "10px 8px", borderBottom: "1px solid #e2e8f0" }}>Last Sequence</th>
 								<th style={{ textAlign: "left", padding: "10px 8px", borderBottom: "1px solid #e2e8f0" }}>Updated At</th>
 								<th style={{ textAlign: "left", padding: "10px 8px", borderBottom: "1px solid #e2e8f0" }}>New Sequence</th>
@@ -431,7 +482,7 @@ export default function AdminPage() {
 						<tbody>
 							{ticketCounters.length === 0 ? (
 								<tr>
-									<td style={{ padding: "14px 8px", color: "#64748b" }} colSpan={5}>
+									<td style={{ padding: "14px 8px", color: "#64748b" }} colSpan={7}>
 										No ticket counters found.
 									</td>
 								</tr>
@@ -439,6 +490,24 @@ export default function AdminPage() {
 								ticketCounters.map((counter) => (
 									<tr key={counter.facility_code}>
 										<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9", fontWeight: 600 }}>{counter.facility_code}</td>
+										<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9", color: "#334155" }}>{counter.facility_name}</td>
+										<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9" }}>
+											<div
+												style={{
+													display: "inline-flex",
+													alignItems: "center",
+													padding: "6px 10px",
+													borderRadius: 999,
+													background: "#eff6ff",
+													border: "1px solid #bfdbfe",
+													color: "#1d4ed8",
+													fontWeight: 700,
+													fontSize: 13,
+												}}
+											>
+												{counter.ticket_preview}
+											</div>
+										</td>
 										<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9" }}>{counter.last_sequence}</td>
 										<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9" }}>{counter.updated_at}</td>
 										<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9" }}>

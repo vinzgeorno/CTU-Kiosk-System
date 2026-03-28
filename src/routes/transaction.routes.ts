@@ -8,6 +8,7 @@ import { PrinterService } from "../printing/printer.service";
 import { buildTransactionDetails } from "../services/transaction-builder.service";
 import { ProcessTransactionService } from "../services/process-transaction.service";
 import { TransactionRecordBuilderService } from "../services/transaction-record-builder.service";
+import { SupabaseSyncService } from "../services/supabase-sync.service";
 import { TransactionRecord } from "../types/transaction.types";
 import { paymentSessionStore } from "../hardware/shared-payment-session";
 
@@ -79,10 +80,12 @@ export default async function transactionRoutes(fastify: any) {
 	const paymentEventsRepository = new PaymentEventsRepository(db);
 	const sessionLogsRepository = new SessionLogsRepository(db);
 	const printerService = new PrinterService();
+	const supabaseSyncService = new SupabaseSyncService();
 	const processTransactionService = new ProcessTransactionService(
 		transactionRecordBuilderService,
 		transactionRepository,
-		printerService
+		printerService,
+		supabaseSyncService
 	);
 
 	fastify.post(

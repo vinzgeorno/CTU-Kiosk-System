@@ -28,9 +28,8 @@ const mqttListener = new MqttListenerService(
 );
 
 mqttListener.on("payment", (event) => {
-	const result = applyPaymentEventService.apply(event);
 	console.log(
-		`[MQTT payment] source=${event.source} amount=${event.amount} result=${result.message}`
+		`[MQTT payment] source=${event.source} amount=${event.amount}`
 	);
 });
 
