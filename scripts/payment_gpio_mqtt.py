@@ -482,7 +482,7 @@ def main():
             GPIO.add_event_detect(COIN_PIN, GPIO.FALLING,
                                 callback=coin_pulse_callback,
                                 bouncetime=COIN_DEBOUNCE_MS)
-            GPIO.add_event_detect(BILL_PIN, GPIO.RISING,
+            GPIO.add_event_detect(BILL_PIN, GPIO.FALLING,
                                 callback=bill_pulse_callback,
                                 bouncetime=BILL_DEBOUNCE_MS)
             gpio_available = True

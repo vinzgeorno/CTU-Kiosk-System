@@ -32,6 +32,7 @@ export async function startPaymentSession(payload: unknown) {
 export async function getCurrentPaymentSession() {
 	return requestJson("/payment-session/current", {
 		method: "GET",
+		cache: "no-store",
 	});
 }
 

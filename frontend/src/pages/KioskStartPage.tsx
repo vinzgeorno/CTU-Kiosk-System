@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { facilities } from "../data/facilities";
 import type { CategoryCode } from "../data/facilities";
 import { KioskSelectionState } from "../types/kiosk";
@@ -66,8 +66,15 @@ const extractDataRecord = (value: unknown) => {
 		return null;
 	}
 
-	const nested = asRecord(topLevel.session) ?? asRecord(topLevel.data);
-	return nested ?? topLevel;
+	if (Object.prototype.hasOwnProperty.call(topLevel, "session")) {
+		return asRecord(topLevel.session);
+	}
+
+	if (Object.prototype.hasOwnProperty.call(topLevel, "data")) {
+		return asRecord(topLevel.data);
+	}
+
+	return topLevel;
 };
 
 export default function KioskStartPage() {
@@ -144,18 +151,11 @@ export default function KioskStartPage() {
 		fallbackFacilityName: string,
 		fallbackAmountDue: number,
 		fallbackUnits: number
-	): PaymentSessionView => {
+	): PaymentSessionView | null => {
 		const record = extractDataRecord(payload);
 
 		if (!record) {
-			return {
-				facilityName: fallbackFacilityName,
-				amountDue: fallbackAmountDue,
-				amountInserted: 0,
-				remainingAmount: fallbackAmountDue,
-				totalUnits: fallbackUnits,
-				status: "pending",
-			};
+			return null;
 		}
 
 		const amountDue = getNumber(record, ["amountDue", "amount_due", "totalAmount", "total_amount"], fallbackAmountDue);
@@ -176,6 +176,19 @@ export default function KioskStartPage() {
 		};
 	};
 
+	const createFallbackSessionView = (
+		facilityName: string,
+		amountDue: number,
+		units: number
+	): PaymentSessionView => ({
+		facilityName,
+		amountDue,
+		amountInserted: 0,
+		remainingAmount: amountDue,
+		totalUnits: units,
+		status: "pending",
+	});
+
 	const handleStartSession = async () => {
 		if (!selectedFacility || !canProceed) {
 			return;
@@ -193,8 +206,12 @@ export default function KioskStartPage() {
 
 			const startResult = await startPaymentSession(startPayload);
 			const currentResult = await getCurrentPaymentSession().catch(() => startResult);
+			const nextSession =
+				mapSessionView(currentResult, selectedFacility.name, totalAmount, totalUnits) ??
+				mapSessionView(startResult, selectedFacility.name, totalAmount, totalUnits) ??
+				createFallbackSessionView(selectedFacility.name, totalAmount, totalUnits);
 
-			setSession(mapSessionView(currentResult, selectedFacility.name, totalAmount, totalUnits));
+			setSession(nextSession);
 		} catch (error) {
 			setErrorMessage(error instanceof Error ? error.message : "Failed to start payment session");
 		} finally {
@@ -204,8 +221,56 @@ export default function KioskStartPage() {
 
 	const refreshCurrentSession = async (fallbackSession: PaymentSessionView) => {
 		const currentResult = await getCurrentPaymentSession();
-		setSession(mapSessionView(currentResult, fallbackSession.facilityName, fallbackSession.amountDue, fallbackSession.totalUnits));
+		const nextSession = mapSessionView(
+			currentResult,
+			fallbackSession.facilityName,
+			fallbackSession.amountDue,
+			fallbackSession.totalUnits
+		);
+		setSession(nextSession);
 	};
+
+	useEffect(() => {
+		if (!session || completedTransaction) {
+			return;
+		}
+
+		let isStopped = false;
+
+		const pollCurrentSession = async () => {
+			try {
+				const currentResult = await getCurrentPaymentSession();
+
+				if (isStopped) {
+					return;
+				}
+
+				setSession((prev) => {
+					if (!prev) {
+						return prev;
+					}
+
+					return mapSessionView(
+						currentResult,
+						prev.facilityName,
+						prev.amountDue,
+						prev.totalUnits
+					);
+				});
+			} catch {
+				// Ignore transient polling failures and keep current UI state.
+			}
+		};
+
+		const intervalId = window.setInterval(() => {
+			void pollCurrentSession();
+		}, 1000);
+
+		return () => {
+			isStopped = true;
+			window.clearInterval(intervalId);
+		};
+	}, [Boolean(session), Boolean(completedTransaction)]);
 
 	const handleInsertAmount = async (amount: number) => {
 		if (!session) {
@@ -600,7 +665,7 @@ export default function KioskStartPage() {
 								</div>
 							</div>
 
-							<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+							<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
 								<div style={{ padding: "8px 7px", borderRadius: 8, background: "#fafafa", border: "1px solid #eef2f7" }}>
 									<div style={{ fontSize: 10, color: "#64748b" }}>Due</div>
 									<div style={{ fontWeight: 900, fontSize: 16, color: "#0f766e" }}>PHP {session.amountDue.toFixed(2)}</div>
@@ -612,6 +677,10 @@ export default function KioskStartPage() {
 								<div style={{ padding: "8px 7px", borderRadius: 8, background: "#fffaf0", border: "1px solid #fef3c7" }}>
 									<div style={{ fontSize: 10, color: "#92400e" }}>Remaining</div>
 									<div style={{ fontWeight: 900, fontSize: 16, color: "#b45309" }}>PHP {session.remainingAmount.toFixed(2)}</div>
+								</div>
+								<div style={{ padding: "8px 7px", borderRadius: 8, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+									<div style={{ fontSize: 10, color: "#475569" }}>Total Units</div>
+									<div style={{ fontWeight: 900, fontSize: 16, color: "#0f172a" }}>{session.totalUnits}</div>
 								</div>
 							</div>
 
