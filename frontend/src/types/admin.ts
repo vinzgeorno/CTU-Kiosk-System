@@ -23,3 +23,13 @@ export type TransactionStats = {
   fastestDurationMs: number;
   slowestDurationMs: number;
 };
+
+export type FacilitySummaryReportRow = {
+  facility_code: string;
+  facility_name: string;
+  first_ticket_label: string;
+  last_ticket_label: string;
+  transaction_count: number;
+  total_units: number;
+  total_amount: number;
+};

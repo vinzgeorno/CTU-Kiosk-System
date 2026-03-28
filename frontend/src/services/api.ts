@@ -108,3 +108,11 @@ export async function getTransactionStats() {
 
 	return data;
 }
+
+export async function getFacilitySummaryReport(startAt: string, endAt: string) {
+	const query = `?startAt=${encodeURIComponent(startAt)}&endAt=${encodeURIComponent(endAt)}`;
+
+	return requestJson(`/reports/facility-summary${query}`, {
+		method: "GET",
+	});
+}

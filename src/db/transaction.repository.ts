@@ -11,6 +11,16 @@ type TransactionStatsRow = {
 	slowestDurationMs: number | null;
 };
 
+type FacilitySummaryReportRow = {
+	facility_code: string;
+	facility_name: string;
+	first_ticket_label: string | null;
+	last_ticket_label: string | null;
+	transaction_count: number | null;
+	total_units: number | null;
+	total_amount: number | null;
+};
+
 export class TransactionRepository {
 	constructor(private readonly database: Database.Database = db) {}
 
@@ -212,5 +222,60 @@ export class TransactionRepository {
 			fastestDurationMs: Number(stats.fastestDurationMs ?? 0),
 			slowestDurationMs: Number(stats.slowestDurationMs ?? 0),
 		};
+	}
+
+	getFacilitySummaryReport(startAt: string, endAt: string) {
+		const statement = this.database.prepare(
+			`
+				SELECT
+					t.facility_code,
+					t.facility_name,
+					(
+						SELECT inner_t.ticket_label
+						FROM transactions inner_t
+						WHERE inner_t.facility_code = t.facility_code
+						  AND inner_t.created_at >= ?
+						  AND inner_t.created_at < ?
+						ORDER BY inner_t.created_at ASC, inner_t.id ASC
+						LIMIT 1
+					) AS first_ticket_label,
+					(
+						SELECT inner_t.ticket_label
+						FROM transactions inner_t
+						WHERE inner_t.facility_code = t.facility_code
+						  AND inner_t.created_at >= ?
+						  AND inner_t.created_at < ?
+						ORDER BY inner_t.created_at DESC, inner_t.id DESC
+						LIMIT 1
+					) AS last_ticket_label,
+					COUNT(*) AS transaction_count,
+					COALESCE(SUM(t.total_units), 0) AS total_units,
+					COALESCE(SUM(t.amount_paid), 0) AS total_amount
+				FROM transactions t
+				WHERE t.created_at >= ?
+				  AND t.created_at < ?
+				GROUP BY t.facility_code, t.facility_name
+				ORDER BY t.facility_code ASC
+			`
+		);
+
+		const rows = statement.all(
+			startAt,
+			endAt,
+			startAt,
+			endAt,
+			startAt,
+			endAt
+		) as FacilitySummaryReportRow[];
+
+		return rows.map((row) => ({
+			facility_code: row.facility_code,
+			facility_name: row.facility_name,
+			first_ticket_label: row.first_ticket_label,
+			last_ticket_label: row.last_ticket_label,
+			transaction_count: Number(row.transaction_count ?? 0),
+			total_units: Number(row.total_units ?? 0),
+			total_amount: Number(row.total_amount ?? 0),
+		}));
 	}
 }

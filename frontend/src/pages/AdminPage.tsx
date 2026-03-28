@@ -7,11 +7,13 @@ import {
 	reprintTransactionById,
 	updateTicketCounter,
 	getTransactionStats,
+	getFacilitySummaryReport,
 } from "../services/api";
 import type {
 	RecentTransaction,
 	TicketCounterRow,
 	TransactionStats,
+	FacilitySummaryReportRow,
 } from "../types/admin";
 
 type AdminTab = "dashboard" | "transactions" | "counters" | "search" | "reports";
@@ -100,6 +102,40 @@ const formatDuration = (value: number) => {
 	return `${milliseconds}ms`;
 };
 
+const createDefaultReportWindow = () => {
+	const start = new Date();
+	start.setHours(9, 0, 0, 0);
+
+	const end = new Date(start);
+	end.setDate(end.getDate() + 1);
+
+	return {
+		start,
+		end,
+		startAt: start.toISOString(),
+		endAt: end.toISOString(),
+	};
+};
+
+const formatReportPeriod = (value: string | null) => {
+	if (!value) {
+		return "-";
+	}
+
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) {
+		return value;
+	}
+
+	return date.toLocaleString([], {
+		year: "numeric",
+		month: "short",
+		day: "numeric",
+		hour: "numeric",
+		minute: "2-digit",
+	});
+};
+
 const panelStyle: React.CSSProperties = {
 	padding: 20,
 	borderRadius: 18,
@@ -176,6 +212,13 @@ export default function AdminPage() {
 	const [counterMessage, setCounterMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 	const [reprintMessage, setReprintMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 	const [reprintingTransactions, setReprintingTransactions] = useState<Record<number, boolean>>({});
+	const [facilitySummaryRows, setFacilitySummaryRows] = useState<FacilitySummaryReportRow[]>([]);
+	const [isLoadingFacilityReport, setIsLoadingFacilityReport] = useState(false);
+	const [facilityReportError, setFacilityReportError] = useState<string | null>(null);
+	const [facilityReportPeriod, setFacilityReportPeriod] = useState<{ startAt: string | null; endAt: string | null }>({
+		startAt: null,
+		endAt: null,
+	});
 
 	const loadCounters = async () => {
 		const countersResult = await getTicketCounters();
@@ -316,6 +359,28 @@ export default function AdminPage() {
 				...prev,
 				[transaction.id]: false,
 			}));
+		}
+	};
+
+	const handleLoadFacilityReport = async () => {
+		const { startAt, endAt } = createDefaultReportWindow();
+
+		setIsLoadingFacilityReport(true);
+		setFacilityReportError(null);
+		setFacilityReportPeriod({ startAt, endAt });
+
+		try {
+			const result = await getFacilitySummaryReport(startAt, endAt);
+			setFacilitySummaryRows(
+				extractArray<FacilitySummaryReportRow>(result, ["report", "data", "items"])
+			);
+		} catch (error) {
+			setFacilitySummaryRows([]);
+			setFacilityReportError(
+				error instanceof Error ? error.message : "Failed to load facility summary report."
+			);
+		} finally {
+			setIsLoadingFacilityReport(false);
 		}
 	};
 
@@ -647,19 +712,105 @@ export default function AdminPage() {
 	);
 
 	const renderReports = () => (
-		<section style={{ ...panelStyle, display: "grid", gap: 10 }}>
-			<h2 style={{ margin: 0, fontSize: 22, color: "#0f172a" }}>Reports</h2>
+		<section style={{ ...panelStyle, display: "grid", gap: 14 }}>
+			<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+				<div>
+					<h2 style={{ margin: 0, fontSize: 22, color: "#0f172a" }}>Reports</h2>
+					<p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 14 }}>
+						Load a 9AM-to-9AM facility summary for the current operating day.
+					</p>
+				</div>
+				<button
+					type="button"
+					onClick={handleLoadFacilityReport}
+					disabled={isLoadingFacilityReport}
+					style={{
+						padding: "10px 14px",
+						borderRadius: 10,
+						border: "none",
+						background: "#1d4ed8",
+						color: "#ffffff",
+						fontWeight: 700,
+						fontSize: 14,
+						cursor: isLoadingFacilityReport ? "not-allowed" : "pointer",
+					}}
+				>
+					{isLoadingFacilityReport ? "Loading Report..." : "Load 9AM-9AM Report"}
+				</button>
+			</div>
+
 			<div
 				style={{
-					padding: 20,
-					borderRadius: 14,
-					border: "1px dashed #94a3b8",
+					display: "grid",
+					gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+					gap: 10,
+					padding: 14,
+					borderRadius: 12,
 					background: "#f8fafc",
-					color: "#475569",
+					border: "1px solid #e2e8f0",
 				}}
 			>
-				Reports feature coming soon
+				<div>
+					<div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Report Start</div>
+					<div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a" }}>
+						{formatReportPeriod(facilityReportPeriod.startAt)}
+					</div>
+				</div>
+				<div>
+					<div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Report End</div>
+					<div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a" }}>
+						{formatReportPeriod(facilityReportPeriod.endAt)}
+					</div>
+				</div>
 			</div>
+
+			{facilityReportError ? <div style={messageStyle("error")}>{facilityReportError}</div> : null}
+
+			{isLoadingFacilityReport ? (
+				<div style={emptyStateStyle}>Loading facility summary report...</div>
+			) : facilitySummaryRows.length === 0 ? (
+				<div style={emptyStateStyle}>
+					{facilityReportPeriod.startAt && facilityReportPeriod.endAt
+						? "No facility summary rows found for the selected 9AM-to-9AM report window."
+						: "Load the 9AM-to-9AM report to view facility ticket and transaction totals."}
+				</div>
+			) : (
+				<div style={{ overflowX: "auto" }}>
+					<table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
+						<thead>
+							<tr>
+								<th style={{ textAlign: "left", padding: "10px 8px", borderBottom: "1px solid #e2e8f0", color: "#334155" }}>Facility</th>
+								<th style={{ textAlign: "left", padding: "10px 8px", borderBottom: "1px solid #e2e8f0", color: "#334155" }}>First Ticket</th>
+								<th style={{ textAlign: "left", padding: "10px 8px", borderBottom: "1px solid #e2e8f0", color: "#334155" }}>Last Ticket</th>
+								<th style={{ textAlign: "left", padding: "10px 8px", borderBottom: "1px solid #e2e8f0", color: "#334155" }}>Transactions</th>
+								<th style={{ textAlign: "left", padding: "10px 8px", borderBottom: "1px solid #e2e8f0", color: "#334155" }}>Units</th>
+								<th style={{ textAlign: "left", padding: "10px 8px", borderBottom: "1px solid #e2e8f0", color: "#334155" }}>Total Amount</th>
+							</tr>
+						</thead>
+						<tbody>
+							{facilitySummaryRows.map((row) => (
+								<tr key={row.facility_code}>
+									<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9" }}>
+										<div style={{ fontWeight: 700, color: "#0f172a", fontSize: 14 }}>{row.facility_name}</div>
+										<div style={{ color: "#64748b", fontSize: 12 }}>{row.facility_code}</div>
+									</td>
+									<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9", fontWeight: 600 }}>
+										{row.first_ticket_label || "-"}
+									</td>
+									<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9", fontWeight: 600 }}>
+										{row.last_ticket_label || "-"}
+									</td>
+									<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9" }}>{row.transaction_count}</td>
+									<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9" }}>{row.total_units}</td>
+									<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9", fontWeight: 700 }}>
+										{formatCurrency(row.total_amount)}
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			)}
 		</section>
 	);
 

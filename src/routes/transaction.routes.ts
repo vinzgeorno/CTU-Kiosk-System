@@ -32,6 +32,11 @@ type RecentTransactionsQuery = {
 	limit?: string | number;
 };
 
+type FacilitySummaryReportQuery = {
+	startAt?: string;
+	endAt?: string;
+};
+
 type UpdateTicketCounterParams = {
 	facilityCode?: string;
 };
@@ -398,6 +403,42 @@ export default async function transactionRoutes(fastify: any) {
 				return {
 					success: true,
 					stats,
+				};
+			} catch (error) {
+				return reply.status(500).send({
+					success: false,
+					message: error instanceof Error ? error.message : "Unknown error",
+				});
+			}
+		}
+	);
+
+	fastify.get(
+		"/reports/facility-summary",
+		async (request: { query: FacilitySummaryReportQuery }, reply: any) => {
+			const startAt = request.query?.startAt;
+			const endAt = request.query?.endAt;
+
+			if (typeof startAt !== "string" || startAt.trim() === "") {
+				return reply.status(400).send({
+					success: false,
+					message: "startAt is required and must be a non-empty string.",
+				});
+			}
+
+			if (typeof endAt !== "string" || endAt.trim() === "") {
+				return reply.status(400).send({
+					success: false,
+					message: "endAt is required and must be a non-empty string.",
+				});
+			}
+
+			try {
+				const report = transactionRepository.getFacilitySummaryReport(startAt, endAt);
+
+				return {
+					success: true,
+					report,
 				};
 			} catch (error) {
 				return reply.status(500).send({
