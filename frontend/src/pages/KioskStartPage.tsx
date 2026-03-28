@@ -17,7 +17,6 @@ type PaymentSessionView = {
 	facilityName: string;
 	amountDue: number;
 	amountInserted: number;
-	remainingAmount: number;
 	totalUnits: number;
 	status: string;
 };
@@ -136,7 +135,7 @@ export default function KioskStartPage() {
 	};
 
 	const canProceed = Boolean(selection.facilityCode) && totalUnits > 0;
-	const canComplete = session?.status.toLowerCase() === "paid";
+	const canComplete = session?.status === "paid";
 
 	const formatCategoryLabel = (categoryCode: CategoryCode) =>
 		categoryCode
@@ -144,48 +143,24 @@ export default function KioskStartPage() {
 			.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
 			.join(" ");
 
-	const mapSessionView = (
-		payload: unknown,
-		fallbackFacilityName: string,
-		fallbackAmountDue: number,
-		fallbackUnits: number
-	): PaymentSessionView | null => {
+	const mapSessionView = (payload: unknown): PaymentSessionView | null => {
 		const record = extractDataRecord(payload);
 
 		if (!record) {
 			return null;
 		}
 
-		const amountDue = getNumber(record, ["amountDue", "amount_due", "totalAmount", "total_amount"], fallbackAmountDue);
+		const amountDue = getNumber(record, ["amountDue", "amount_due", "totalAmount", "total_amount"], 0);
 		const amountInserted = getNumber(record, ["amountInserted", "amount_inserted", "insertedAmount", "inserted_amount"], 0);
-		const remainingAmount = getNumber(
-			record,
-			["remainingAmount", "remaining_amount", "amountRemaining", "amount_remaining"],
-			Math.max(0, amountDue - amountInserted)
-		);
 
 		return {
-			facilityName: getString(record, ["facilityName", "facility_name", "facility"], fallbackFacilityName),
+			facilityName: getString(record, ["facilityName", "facility_name", "facility"], ""),
 			amountDue,
 			amountInserted,
-			remainingAmount,
-			totalUnits: getNumber(record, ["totalUnits", "total_units", "units"], fallbackUnits),
+			totalUnits: getNumber(record, ["totalUnits", "total_units", "units"], 0),
 			status: getString(record, ["status"], "pending"),
 		};
 	};
-
-	const createFallbackSessionView = (
-		facilityName: string,
-		amountDue: number,
-		units: number
-	): PaymentSessionView => ({
-		facilityName,
-		amountDue,
-		amountInserted: 0,
-		remainingAmount: amountDue,
-		totalUnits: units,
-		status: "pending",
-	});
 
 	const handleStartSession = async () => {
 		if (!selectedFacility || !canProceed) {
@@ -204,10 +179,11 @@ export default function KioskStartPage() {
 
 			const startResult = await startPaymentSession(startPayload);
 			const currentResult = await getCurrentPaymentSession().catch(() => startResult);
-			const nextSession =
-				mapSessionView(currentResult, selectedFacility.name, totalAmount, totalUnits) ??
-				mapSessionView(startResult, selectedFacility.name, totalAmount, totalUnits) ??
-				createFallbackSessionView(selectedFacility.name, totalAmount, totalUnits);
+			const nextSession = mapSessionView(currentResult) ?? mapSessionView(startResult);
+
+			if (!nextSession) {
+				throw new Error("Payment session started but no session data was returned");
+			}
 
 			setSession(nextSession);
 		} catch (error) {
@@ -232,18 +208,11 @@ export default function KioskStartPage() {
 					return;
 				}
 
-				setSession((prev) => {
-					if (!prev) {
-						return prev;
-					}
+				const nextSession = mapSessionView(currentResult);
 
-					return mapSessionView(
-						currentResult,
-						prev.facilityName,
-						prev.amountDue,
-						prev.totalUnits
-					);
-				});
+				if (nextSession) {
+					setSession(nextSession);
+				}
 			} catch {
 				// Ignore transient polling failures and keep current UI state.
 			}
@@ -302,6 +271,8 @@ export default function KioskStartPage() {
 	const handleGoHome = () => {
 		window.location.pathname = "/";
 	};
+
+	const remainingAmount = session ? Math.max(session.amountDue - session.amountInserted, 0) : 0;
 
 	return (
 		<div
@@ -696,7 +667,7 @@ export default function KioskStartPage() {
 									</div>
 									<div style={{ padding: "8px 7px", borderRadius: 10, background: "#fffaf0", border: "1px solid #fef3c7" }}>
 										<div style={{ fontSize: 10, color: "#92400e" }}>Remaining</div>
-										<div style={{ fontWeight: 900, fontSize: 16, color: "#b45309" }}>PHP {session.remainingAmount.toFixed(2)}</div>
+										<div style={{ fontWeight: 900, fontSize: 16, color: "#b45309" }}>PHP {remainingAmount.toFixed(2)}</div>
 									</div>
 									<div style={{ padding: "8px 7px", borderRadius: 10, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
 										<div style={{ fontSize: 10, color: "#475569" }}>Total Units</div>
