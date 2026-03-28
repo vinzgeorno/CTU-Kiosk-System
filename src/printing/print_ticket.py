@@ -31,19 +31,40 @@ def to_int(value, default=0):
         return default
 
 
+def parse_created_at(value):
+    if not value:
+        return datetime.now()
+
+    if isinstance(value, datetime):
+        return value
+
+    if not isinstance(value, str):
+        raise ValueError("createdAt must be a valid ISO date string.")
+
+    normalized = value.replace("Z", "+00:00")
+    return datetime.fromisoformat(normalized)
+
+
 def format_created_at(value):
     if not value:
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    if not isinstance(value, str):
+    try:
+        parsed = parse_created_at(value)
+        return parsed.strftime("%Y-%m-%d %H:%M:%S")
+    except (TypeError, ValueError):
         return str(value)
 
-    try:
-        normalized = value.replace("Z", "+00:00")
-        parsed = datetime.fromisoformat(normalized)
-        return parsed.strftime("%Y-%m-%d %H:%M:%S")
-    except ValueError:
-        return value
+
+def build_validity_text(value):
+    issued_at = parse_created_at(value)
+    valid_until = issued_at.replace(hour=22, minute=0, second=0, microsecond=0)
+
+    return {
+        "issued_date": issued_at.strftime("%m/%d/%Y"),
+        "issued_time": issued_at.strftime("%I:%M %p"),
+        "valid_until": valid_until.strftime("%I:%M %p"),
+    }
 
 
 def print_ticket(data):
@@ -62,26 +83,25 @@ def print_ticket(data):
         breakdown = data.get("breakdown") if isinstance(data.get("breakdown"), list) else []
         created_at_raw = data.get("createdAt")
         created_at = format_created_at(created_at_raw)
+        validity = build_validity_text(created_at_raw)
 
         if total_units <= 0 and breakdown:
             total_units = sum(to_int(item.get("quantity"), default=0) for item in breakdown)
 
-        # Compact layout to save paper
         printer.set(align="center")
 
-        # Print ticket header
-        printer.text("BUILDING ACCESS\n")
-        printer.text("VISITOR PASS\n")
+        printer.text("CTU KIOSK SYSTEM\n")
+        printer.text("ACCESS TICKET\n")
         printer.text("=" * 32 + "\n")
 
-        # Info section
         if facility_name:
-            printer.text(f"FACILITY: {facility_name}\n")
+            printer.text(f"{facility_name}\n")
         if ticket_label:
-            printer.text(f"TICKET: {ticket_label}\n")
+            printer.text(f"TICKET ID: {ticket_label}\n")
+        printer.text(f"ISSUED: {validity['issued_date']} {validity['issued_time']}\n")
+        printer.text(f"VALID UNTIL: {validity['valid_until']} TODAY\n")
         printer.text("-" * 32 + "\n")
 
-        # Breakdown section
         printer.set(align="left")
         for item in breakdown:
             category_label = str(item.get("categoryLabel") or "Item")
@@ -93,11 +113,11 @@ def print_ticket(data):
         printer.text(f"TOTAL UNITS: {total_units}\n")
         printer.text(f"AMOUNT DUE : {amount_due:.2f}\n")
         printer.text(f"AMOUNT PAID: {amount_paid:.2f}\n")
-        printer.text(f"TIME: {created_at}\n")
+        printer.text(f"ISSUE TIME : {created_at}\n")
+        printer.text("VALID TODAY ONLY\n")
 
         printer.set(align="center")
 
-        # Generate and print compact QR code
         try:
             qr = qrcode.QRCode(
                 version=1,
@@ -115,10 +135,9 @@ def print_ticket(data):
             print(f"Warning: Could not print QR code: {e}", file=sys.stderr)
             printer.text("QR: [N/A]\n")
 
-        # Compact footer
-        printer.text("\nKeep with you\n")
+        printer.text("\nPRESENT THIS TICKET\n")
+        printer.text("AT THE FACILITY ENTRANCE\n")
 
-        # Reset text settings and cut paper
         printer.set(align="center")
         try:
             printer.cut()

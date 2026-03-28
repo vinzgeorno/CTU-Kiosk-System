@@ -65,24 +65,21 @@ export class TransactionRecordBuilderService {
 			allocation.endNo
 		);
 
-		const createdAt = input.createdAt ?? new Date().toISOString();
+		const completedAt = input.createdAt ?? new Date().toISOString();
 
-		if (Number.isNaN(Date.parse(createdAt))) {
+		if (Number.isNaN(Date.parse(completedAt))) {
 			throw new Error("createdAt must be a valid ISO date string.");
 		}
 
-		const startedAt = input.startedAt ?? createdAt;
+		const startedAt = input.startedAt ?? completedAt;
 		if (Number.isNaN(Date.parse(startedAt))) {
 			throw new Error("startedAt must be a valid ISO date string.");
 		}
 
-		const completedAt = createdAt;
-		const startedAtDate = new Date(startedAt);
-		const completedAtDate = new Date(completedAt);
-		const durationMs =
-			!Number.isNaN(startedAtDate.getTime()) && !Number.isNaN(completedAtDate.getTime())
-				? Math.max(0, completedAtDate.getTime() - startedAtDate.getTime())
-				: undefined;
+		const durationMs = Math.max(
+			new Date(completedAt).getTime() - new Date(startedAt).getTime(),
+			0
+		);
 
 		return {
 			facilityCode: input.facilityCode,
@@ -104,7 +101,7 @@ export class TransactionRecordBuilderService {
 			sourceMode: input.sourceMode ?? "hardware_live",
 			errorMessage: null,
 			breakdown: details.breakdown,
-			createdAt,
+			createdAt: completedAt,
 		};
 	}
 }

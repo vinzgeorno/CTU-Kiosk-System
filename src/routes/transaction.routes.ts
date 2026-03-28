@@ -298,16 +298,16 @@ export default async function transactionRoutes(fastify: any) {
 		"/payment-session/complete",
 		async (_request: any, reply: any) => {
 			try {
-				const currentSession = paymentSessionStore.getCurrent();
+				const session = paymentSessionStore.getCurrent();
 
-				if (!currentSession) {
+				if (!session) {
 					return reply.status(400).send({
 						success: false,
 						message: "No active payment session",
 					});
 				}
 
-				if (currentSession.status !== "paid") {
+				if (session.status !== "paid") {
 					return reply.status(400).send({
 						success: false,
 						message: "Payment session is not yet fully paid",
@@ -315,25 +315,27 @@ export default async function transactionRoutes(fastify: any) {
 				}
 
 				const quantities: Record<string, number> = {};
-				for (const item of currentSession.breakdown) {
+				for (const item of session.breakdown) {
 					quantities[item.categoryCode] = item.quantity;
 				}
 
+				const completionTimestamp = new Date().toISOString();
+
 				const result = await processTransactionService.process({
-					facilityCode: currentSession.facilityCode as any,
+					facilityCode: session.facilityCode as any,
 					quantities,
-					amountPaid: currentSession.amountInserted,
-					createdAt: currentSession.createdAt,
-					sessionId: currentSession.id,
-					startedAt: currentSession.createdAt,
+					amountPaid: session.amountInserted,
+					createdAt: completionTimestamp,
+					sessionId: session.id,
+					startedAt: session.createdAt,
 					sourceMode: "hardware_live",
 				});
 
 				paymentSessionStore.update({ status: "completed" });
 				sessionLogsRepository.markCompleted(
-					currentSession.id,
+					session.id,
 					result.transactionId,
-					currentSession.amountInserted
+					session.amountInserted
 				);
 				paymentSessionStore.clear();
 
