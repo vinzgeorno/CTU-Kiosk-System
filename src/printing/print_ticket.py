@@ -97,7 +97,8 @@ def print_ticket(data):
         if facility_name:
             printer.text(f"{facility_name}\n")
         if ticket_label:
-            printer.text(f"TICKET ID: {ticket_label}\n")
+            printer.text("TICKET ID:\n")
+            printer.text(f"{ticket_label}\n")
         printer.text(f"ISSUED: {validity['issued_date']} {validity['issued_time']}\n")
         printer.text(f"VALID UNTIL: {validity['valid_until']} TODAY\n")
         printer.text("-" * 32 + "\n")

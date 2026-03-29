@@ -13,6 +13,9 @@ const initialState: KioskSelectionState = {
 	quantities: {},
 };
 
+const PAYMENT_POLL_INTERVAL_MS = 400;
+const SUCCESS_TRANSITION_DELAY_MS = 650;
+
 type KioskStep = "select" | "payment" | "success";
 
 type PaymentSessionView = {
@@ -108,6 +111,24 @@ const formatReportPeriod = (value: string | null) => {
 	});
 };
 
+const formatCategoryLabel = (categoryCode: CategoryCode) =>
+	categoryCode
+		.split("_")
+		.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+		.join(" ");
+
+const getCategoryHelperText = (categoryCode: CategoryCode) => {
+	if (categoryCode === "kid") {
+		return "(12 and below)";
+	}
+
+	if (categoryCode === "adult") {
+		return "(13 and above)";
+	}
+
+	return null;
+};
+
 export default function KioskStartPage() {
 	const [step, setStep] = useState<KioskStep>("select");
 	const [selection, setSelection] = useState<KioskSelectionState>(initialState);
@@ -120,12 +141,6 @@ export default function KioskStartPage() {
 	const [hasTriggeredAutoComplete, setHasTriggeredAutoComplete] = useState(false);
 	const [animatePaidState, setAnimatePaidState] = useState(false);
 	const [isQrAvailable, setIsQrAvailable] = useState(true);
-
-	const formatCategoryLabel = (categoryCode: CategoryCode) =>
-		categoryCode
-			.split("_")
-			.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-			.join(" ");
 
 	const selectedFacility = useMemo(
 		() => facilities.find((facility) => facility.code === selection.facilityCode) ?? null,
@@ -169,9 +184,10 @@ export default function KioskStartPage() {
 	}, [selectedFacility, selection.quantities]);
 
 	const canProceed = Boolean(selection.facilityCode) && totalUnits > 0;
-	const canComplete = session?.status === "paid";
+	const sessionStatus = session?.status.toLowerCase() ?? "";
+	const isPaymentPaid = sessionStatus === "paid";
+	const canComplete = isPaymentPaid;
 	const remainingAmount = session ? Math.max(session.amountDue - session.amountInserted, 0) : 0;
-	const isPaymentPaid = session?.status.toLowerCase() === "paid";
 	const receiptQrSource = completedTransaction
 		? `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
 				`${completedTransaction.ticketLabel}|${completedTransaction.transactionId}`
@@ -338,7 +354,7 @@ export default function KioskStartPage() {
 		const timeoutId = window.setTimeout(() => {
 			setHasTriggeredAutoComplete(true);
 			void handleCompletePayment();
-		}, 900);
+		}, SUCCESS_TRANSITION_DELAY_MS);
 
 		return () => {
 			window.clearTimeout(timeoutId);
@@ -369,9 +385,11 @@ export default function KioskStartPage() {
 			}
 		};
 
+		void pollCurrentSession();
+
 		const intervalId = window.setInterval(() => {
 			void pollCurrentSession();
-		}, 1000);
+		}, PAYMENT_POLL_INTERVAL_MS);
 
 		return () => {
 			isStopped = true;
@@ -606,6 +624,7 @@ export default function KioskStartPage() {
 									>
 										{selectedFacility.categories.map((category) => {
 											const quantity = selection.quantities[category.code] ?? 0;
+											const helperText = getCategoryHelperText(category.code);
 
 											return (
 												<div
@@ -623,20 +642,34 @@ export default function KioskStartPage() {
 													}}
 												>
 													<div style={{ flex: 1, minWidth: 0 }}>
-														<div
-															style={{
-																fontWeight: 800,
-																fontSize: 14,
-																lineHeight: 1.2,
-																color: "#0f172a",
-																whiteSpace: "nowrap",
-																overflow: "hidden",
-																textOverflow: "ellipsis",
-															}}
-														>
-															{formatCategoryLabel(category.code)}
+														<div style={{ display: "grid", gap: helperText ? 2 : 0 }}>
+															<div
+																style={{
+																	fontWeight: 800,
+																	fontSize: 14,
+																	lineHeight: 1.2,
+																	color: "#0f172a",
+																	whiteSpace: "nowrap",
+																	overflow: "hidden",
+																	textOverflow: "ellipsis",
+																}}
+															>
+																{formatCategoryLabel(category.code)}
+															</div>
+															{helperText ? (
+																<div
+																	style={{
+																		fontSize: 10,
+																		lineHeight: 1.2,
+																		color: "#64748b",
+																		fontWeight: 700,
+																	}}
+																>
+																	{helperText}
+																</div>
+															) : null}
 														</div>
-														<div style={{ fontSize: 12, color: "#475569", marginTop: 3 }}>PHP {category.price.toFixed(2)} each</div>
+														<div style={{ fontSize: 12, color: "#475569", marginTop: helperText ? 4 : 3 }}>PHP {category.price.toFixed(2)} each</div>
 													</div>
 
 													<div style={{ display: "flex", gap: 7, alignItems: "center", flexShrink: 0 }}>
@@ -761,27 +794,38 @@ export default function KioskStartPage() {
 												Select one or more categories to see the ticket breakdown here.
 											</div>
 										) : (
-											selectedBreakdown.map((item) => (
-												<div
-													key={item.code}
-													style={{
-														padding: "10px 11px",
-														borderRadius: 12,
-														border: "1px solid #dbe7f0",
-														background: "#ffffff",
-														display: "grid",
-														gap: 4,
-													}}
-												>
-													<div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-														<div style={{ fontWeight: 800, fontSize: 13, color: "#0f172a" }}>{item.label}</div>
-														<div style={{ fontWeight: 900, fontSize: 13, color: "#0f766e" }}>PHP {item.subtotal.toFixed(2)}</div>
+											selectedBreakdown.map((item) => {
+												const helperText = getCategoryHelperText(item.code);
+
+												return (
+													<div
+														key={item.code}
+														style={{
+															padding: "10px 11px",
+															borderRadius: 12,
+															border: "1px solid #dbe7f0",
+															background: "#ffffff",
+															display: "grid",
+															gap: 4,
+														}}
+													>
+														<div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+															<div style={{ display: "grid", gap: helperText ? 2 : 0 }}>
+																<div style={{ fontWeight: 800, fontSize: 13, color: "#0f172a" }}>{item.label}</div>
+																{helperText ? (
+																	<div style={{ fontSize: 10, lineHeight: 1.2, color: "#64748b", fontWeight: 700 }}>
+																		{helperText}
+																	</div>
+																) : null}
+															</div>
+															<div style={{ fontWeight: 900, fontSize: 13, color: "#0f766e" }}>PHP {item.subtotal.toFixed(2)}</div>
+														</div>
+														<div style={{ fontSize: 12, color: "#475569" }}>
+															{item.quantity} x PHP {item.unitPrice.toFixed(2)}
+														</div>
 													</div>
-													<div style={{ fontSize: 12, color: "#475569" }}>
-														{item.quantity} x PHP {item.unitPrice.toFixed(2)}
-													</div>
-												</div>
-											))
+												);
+											})
 										)}
 									</div>
 								</div>
@@ -871,27 +915,38 @@ export default function KioskStartPage() {
 							</div>
 
 							<div style={{ minHeight: 0, overflowY: "auto", display: "grid", gap: 8, paddingRight: 2 }}>
-								{selectedBreakdown.map((item) => (
-									<div
-										key={item.code}
-										style={{
-											padding: "10px 11px",
-											borderRadius: 12,
-											border: "1px solid #dbe7f0",
-											background: "#ffffff",
-											display: "grid",
-											gap: 4,
-										}}
-									>
-										<div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-											<div style={{ fontWeight: 800, fontSize: 13, color: "#0f172a" }}>{item.label}</div>
-											<div style={{ fontWeight: 900, fontSize: 13, color: "#0f766e" }}>PHP {item.subtotal.toFixed(2)}</div>
+								{selectedBreakdown.map((item) => {
+									const helperText = getCategoryHelperText(item.code);
+
+									return (
+										<div
+											key={item.code}
+											style={{
+												padding: "10px 11px",
+												borderRadius: 12,
+												border: "1px solid #dbe7f0",
+												background: "#ffffff",
+												display: "grid",
+												gap: 4,
+											}}
+										>
+											<div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+												<div style={{ display: "grid", gap: helperText ? 2 : 0 }}>
+													<div style={{ fontWeight: 800, fontSize: 13, color: "#0f172a" }}>{item.label}</div>
+													{helperText ? (
+														<div style={{ fontSize: 10, lineHeight: 1.2, color: "#64748b", fontWeight: 700 }}>
+															{helperText}
+														</div>
+													) : null}
+												</div>
+												<div style={{ fontWeight: 900, fontSize: 13, color: "#0f766e" }}>PHP {item.subtotal.toFixed(2)}</div>
+											</div>
+											<div style={{ fontSize: 12, color: "#475569" }}>
+												{item.quantity} x PHP {item.unitPrice.toFixed(2)}
+											</div>
 										</div>
-										<div style={{ fontSize: 12, color: "#475569" }}>
-											{item.quantity} x PHP {item.unitPrice.toFixed(2)}
-										</div>
-									</div>
-								))}
+									);
+								})}
 							</div>
 
 							<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -1165,12 +1220,23 @@ export default function KioskStartPage() {
 
 							<div style={{ display: "grid", gap: 7 }}>
 								<div style={{ fontSize: 12, fontWeight: 800, color: "#0f172a" }}>ITEM BREAKDOWN</div>
-								{completedTransaction.breakdown.map((item) => (
-									<div key={item.code} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 12, color: "#111827" }}>
-										<span>{item.label} x{item.quantity}</span>
-										<span style={{ fontWeight: 800 }}>PHP {item.subtotal.toFixed(2)}</span>
-									</div>
-								))}
+								{completedTransaction.breakdown.map((item) => {
+									const helperText = getCategoryHelperText(item.code);
+
+									return (
+										<div key={item.code} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 12, color: "#111827" }}>
+											<div style={{ display: "grid", gap: helperText ? 2 : 0 }}>
+												<span>{item.label} x{item.quantity}</span>
+												{helperText ? (
+													<span style={{ fontSize: 10, lineHeight: 1.2, color: "#64748b", fontWeight: 700 }}>
+														{helperText}
+													</span>
+												) : null}
+											</div>
+											<span style={{ fontWeight: 800 }}>PHP {item.subtotal.toFixed(2)}</span>
+										</div>
+									);
+								})}
 							</div>
 
 							<div style={{ borderTop: "1px dashed #94a3b8" }} />

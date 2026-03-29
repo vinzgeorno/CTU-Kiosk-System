@@ -1,0 +1,20 @@
+[Unit]
+Description=CTU Kiosk Master Startup
+After=network.target graphical.target
+
+[Service]
+Type=simple
+User=ctukiosk
+WorkingDirectory=/home/ctukiosk/Desktop/Kiosk-System/CTU-Kiosk-System
+ExecStart=/bin/bash /home/ctukiosk/Desktop/Kiosk-System/start-kiosk.sh
+Restart=always
+RestartSec=5
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/ctukiosk/.Xauthority
+
+[Install]
+WantedBy=graphical.target
+
+#sudo systemctl daemon-reload
+#sudo systemctl enable ctu-kiosk.service
+#sudo systemctl start ctu-kiosk.service

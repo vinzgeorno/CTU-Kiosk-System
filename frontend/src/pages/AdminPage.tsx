@@ -666,7 +666,14 @@ export default function AdminPage() {
 			{loadError ? <div style={messageStyle("error")}>{loadError}</div> : null}
 
 			{!isLoading && !loadError ? (
-				<div style={{ overflowX: "auto" }}>
+				<div
+					style={{
+						overflowX: "auto",
+						overflowY: "hidden",
+						paddingBottom: 14,
+						scrollbarGutter: "stable",
+					}}
+				>
 					<table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
 						<thead>
 							<tr>
@@ -712,8 +719,8 @@ export default function AdminPage() {
 												</div>
 											</td>
 											<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9" }}>{transaction.created_at}</td>
-											<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9" }}>
-												<div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+											<td style={{ padding: "10px 8px 18px", borderBottom: "1px solid #f1f5f9", minWidth: 180, verticalAlign: "top" }}>
+												<div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-start" }}>
 													<button
 														type="button"
 														onClick={() => handleReprint(transaction)}
@@ -725,6 +732,7 @@ export default function AdminPage() {
 															background: "#0f766e",
 															color: "#ffffff",
 															fontWeight: 600,
+															whiteSpace: "nowrap",
 															cursor: reprintingTransactions[transaction.id] ? "not-allowed" : "pointer",
 														}}
 													>
@@ -742,6 +750,7 @@ export default function AdminPage() {
 																background: "#eff6ff",
 																color: "#1d4ed8",
 																fontWeight: 700,
+																whiteSpace: "nowrap",
 																cursor: retryingSyncTransactions[transaction.id] ? "not-allowed" : "pointer",
 															}}
 														>

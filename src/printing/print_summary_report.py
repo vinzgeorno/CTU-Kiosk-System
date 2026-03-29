@@ -55,6 +55,10 @@ def safe_text(value, default="-"):
 	return text if text else default
 
 
+def print_separator(printer, char="-"):
+	printer.text(f"{char * LINE_WIDTH}\n")
+
+
 def print_wrapped(printer, text, prefix=""):
 	content = safe_text(text, default="")
 	if not content:
@@ -85,6 +89,21 @@ def build_ticket_range(row):
 	return f"{first_ticket} to {last_ticket}"
 
 
+def print_summary_block(printer, row):
+	facility_code = safe_text(row.get("facility_code"))
+	facility_name = safe_text(row.get("facility_name"))
+	transaction_count = to_int(row.get("transaction_count"), default=0)
+	total_units = to_int(row.get("total_units"), default=0)
+	total_amount = to_float(row.get("total_amount"), default=0.0)
+	ticket_range = build_ticket_range(row)
+
+	print_wrapped(printer, f"{facility_code} | {facility_name}", prefix="SITE : ")
+	print_wrapped(printer, ticket_range, prefix="RANGE: ")
+	printer.text(f"TXNS : {transaction_count}\n")
+	printer.text(f"UNITS: {total_units}\n")
+	printer.text(f"AMT  : PHP {total_amount:.2f}\n")
+
+
 def print_summary_report(data):
 	try:
 		printer = Usb(0x0416, 0x5011)
@@ -99,45 +118,34 @@ def print_summary_report(data):
 		grand_transaction_count = to_int(data.get("grandTransactionCount"), default=0)
 
 		printer.set(align="center")
-		printer.text("CTU KIOSK\n")
-		printer.text("SUMMARY REPORT\n")
-		printer.text("=" * LINE_WIDTH + "\n")
+		printer.text("CTU KIOSK DAILY SUMMARY REPORT\n")
+		print_separator(printer, "=")
 		printer.text(f"{report_title}\n")
-		printer.text("-" * LINE_WIDTH + "\n")
+		print_separator(printer)
 
 		printer.set(align="left")
-		printer.text(f"Period From: {start_at}\n")
-		printer.text(f"Period To  : {end_at}\n")
-		printer.text("=" * LINE_WIDTH + "\n")
+		print_wrapped(printer, start_at, prefix="START: ")
+		print_wrapped(printer, end_at, prefix="END  : ")
+		print_separator(printer, "=")
 
 		if not rows:
-			printer.text("No report rows found\n")
-			printer.text("=" * LINE_WIDTH + "\n")
+			printer.text("No facility summary rows\n")
+			print_separator(printer, "=")
 		else:
 			for row in rows:
-				facility_code = safe_text(row.get("facility_code"))
-				facility_name = safe_text(row.get("facility_name"))
-				transaction_count = to_int(row.get("transaction_count"), default=0)
-				total_units = to_int(row.get("total_units"), default=0)
-				total_amount = to_float(row.get("total_amount"), default=0.0)
-				ticket_range = build_ticket_range(row)
+				print_summary_block(printer, row)
+				print_separator(printer)
 
-				print_wrapped(printer, f"{facility_code} - {facility_name}")
-				print_wrapped(printer, ticket_range, prefix="Tickets: ")
-				printer.text(f"Txn Count: {transaction_count}\n")
-				printer.text(f"Total Uts: {total_units}\n")
-				printer.text(f"Total Amt: {total_amount:.2f}\n")
-				printer.text("-" * LINE_WIDTH + "\n")
-
-		printer.text("GRAND TOTALS\n")
-		printer.text(f"Transactions: {grand_transaction_count}\n")
-		printer.text(f"Total Units : {grand_total_units}\n")
-		printer.text(f"Total Amount: {grand_total_amount:.2f}\n")
-		printer.text("=" * LINE_WIDTH + "\n")
-		printer.text(f"Generated: {generated_at}\n")
+		print_separator(printer, "=")
+		printer.text("DAILY TOTALS\n")
+		printer.text(f"TXNS : {grand_transaction_count}\n")
+		printer.text(f"UNITS: {grand_total_units}\n")
+		printer.text(f"AMT  : PHP {grand_total_amount:.2f}\n")
+		print_separator(printer)
+		print_wrapped(printer, generated_at, prefix="GEN  : ")
 
 		printer.set(align="center")
-		printer.text("\nEnd of report\n")
+		printer.text("\nEnd of Report\n")
 
 		try:
 			printer.cut()
