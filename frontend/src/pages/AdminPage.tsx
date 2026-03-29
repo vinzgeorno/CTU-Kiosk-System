@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { API_BASE_URL } from "../config";
 import { facilities } from "../data/facilities";
 import {
 	getRecentTransactions,
@@ -169,6 +170,94 @@ type DisplayTicketCounterRow = TicketCounterRow & {
 	ticket_preview: string;
 };
 
+type TransactionSyncStatus = "synced" | "pending" | "failed";
+
+type AdminTransactionRow = RecentTransaction & {
+	sync_status?: string | null;
+	synced_at?: string | null;
+	sync_error?: string | null;
+};
+
+const normalizeSyncStatus = (value: unknown): TransactionSyncStatus => {
+	if (value === "synced" || value === "failed") {
+		return value;
+	}
+
+	return "pending";
+};
+
+const getSyncBadgeStyle = (status: TransactionSyncStatus): React.CSSProperties => {
+	if (status === "synced") {
+		return {
+			display: "inline-flex",
+			alignItems: "center",
+			justifyContent: "center",
+			padding: "4px 8px",
+			borderRadius: 999,
+			fontSize: 11,
+			fontWeight: 700,
+			textTransform: "uppercase",
+			letterSpacing: 0.4,
+			background: "#dcfce7",
+			color: "#166534",
+			border: "1px solid #86efac",
+		};
+	}
+
+	if (status === "failed") {
+		return {
+			display: "inline-flex",
+			alignItems: "center",
+			justifyContent: "center",
+			padding: "4px 8px",
+			borderRadius: 999,
+			fontSize: 11,
+			fontWeight: 700,
+			textTransform: "uppercase",
+			letterSpacing: 0.4,
+			background: "#fee2e2",
+			color: "#991b1b",
+			border: "1px solid #fca5a5",
+		};
+	}
+
+	return {
+		display: "inline-flex",
+		alignItems: "center",
+		justifyContent: "center",
+		padding: "4px 8px",
+		borderRadius: 999,
+		fontSize: 11,
+		fontWeight: 700,
+		textTransform: "uppercase",
+		letterSpacing: 0.4,
+		background: "#fef3c7",
+		color: "#92400e",
+		border: "1px solid #fcd34d",
+	};
+};
+
+const retryTransactionSync = async (id: number) => {
+	let response: Response;
+
+	try {
+		response = await fetch(`${API_BASE_URL}/transactions/${id}/retry-sync`, {
+			method: "POST",
+		});
+	} catch {
+		throw new Error(`Unable to reach backend at ${API_BASE_URL}`);
+	}
+
+	const data = await response.json().catch(() => null);
+
+	if (!response.ok) {
+		const message = data && typeof data.message === "string" ? data.message : "Retry sync failed";
+		throw new Error(message);
+	}
+
+	return data;
+};
+
 const buildTicketPreview = (facilityCode: string, lastSequence: number) => {
 	const monthCode = String(new Date().getMonth() + 1).padStart(2, "0");
 	const nextSequence = String(Math.max(lastSequence, 0) + 1).padStart(4, "0");
@@ -198,14 +287,14 @@ const mergeCounterRows = (backendCounters: TicketCounterRow[]): DisplayTicketCou
 
 export default function AdminPage() {
 	const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
-	const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([]);
+	const [recentTransactions, setRecentTransactions] = useState<AdminTransactionRow[]>([]);
 	const [ticketCounters, setTicketCounters] = useState<DisplayTicketCounterRow[]>([]);
 	const [transactionStats, setTransactionStats] = useState<TransactionStats>(defaultStats);
 	const [isLoading, setIsLoading] = useState(false);
 	const [loadError, setLoadError] = useState<string | null>(null);
 
 	const [ticketLabel, setTicketLabel] = useState("");
-	const [foundTransaction, setFoundTransaction] = useState<RecentTransaction | null>(null);
+	const [foundTransaction, setFoundTransaction] = useState<AdminTransactionRow | null>(null);
 	const [isSearching, setIsSearching] = useState(false);
 	const [searchError, setSearchError] = useState<string | null>(null);
 	const [counterInputs, setCounterInputs] = useState<Record<string, string>>({});
@@ -213,6 +302,8 @@ export default function AdminPage() {
 	const [counterMessage, setCounterMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 	const [reprintMessage, setReprintMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 	const [reprintingTransactions, setReprintingTransactions] = useState<Record<number, boolean>>({});
+	const [retryingSyncTransactions, setRetryingSyncTransactions] = useState<Record<number, boolean>>({});
+	const [syncMessage, setSyncMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 	const [facilitySummaryRows, setFacilitySummaryRows] = useState<FacilitySummaryReportRow[]>([]);
 	const [isLoadingFacilityReport, setIsLoadingFacilityReport] = useState(false);
 	const [facilityReportError, setFacilityReportError] = useState<string | null>(null);
@@ -240,6 +331,13 @@ export default function AdminPage() {
 		);
 	};
 
+	const loadRecentTransactionsData = async () => {
+		const recentResult = await getRecentTransactions();
+		setRecentTransactions(
+			extractArray<AdminTransactionRow>(recentResult, ["data", "transactions", "items"])
+		);
+	};
+
 	useEffect(() => {
 		const loadData = async () => {
 			setIsLoading(true);
@@ -252,7 +350,7 @@ export default function AdminPage() {
 				]);
 
 				setRecentTransactions(
-					extractArray<RecentTransaction>(recentResult, ["data", "transactions", "items"])
+					extractArray<AdminTransactionRow>(recentResult, ["data", "transactions", "items"])
 				);
 
 				setTransactionStats(
@@ -282,7 +380,7 @@ export default function AdminPage() {
 
 		try {
 			const result = await getTransactionByTicketLabel(trimmed);
-			const transaction = extractItem<RecentTransaction>(result, ["data", "transaction", "item"]);
+			const transaction = extractItem<AdminTransactionRow>(result, ["data", "transaction", "item"]);
 
 			if (!transaction) {
 				setSearchError("Transaction not found.");
@@ -294,6 +392,78 @@ export default function AdminPage() {
 			setSearchError(error instanceof Error ? error.message : "Transaction not found.");
 		} finally {
 			setIsSearching(false);
+		}
+	};
+
+	const handleRetrySync = async (transaction: AdminTransactionRow) => {
+		const syncedAt = new Date().toISOString();
+
+		setSyncMessage(null);
+		setRetryingSyncTransactions((prev) => ({
+			...prev,
+			[transaction.id]: true,
+		}));
+
+		try {
+			await retryTransactionSync(transaction.id);
+			setRecentTransactions((prev) =>
+				prev.map((item) =>
+					item.id === transaction.id
+						? {
+							...item,
+							sync_status: "synced",
+							sync_error: null,
+							synced_at: syncedAt,
+						}
+						: item
+				)
+			);
+			setFoundTransaction((prev) =>
+				prev && prev.id === transaction.id
+					? {
+						...prev,
+						sync_status: "synced",
+						sync_error: null,
+						synced_at: syncedAt,
+					}
+					: prev
+			);
+			void loadRecentTransactionsData();
+			setSyncMessage({
+				type: "success",
+				text: `Sync retry successful for ticket ${transaction.ticket_label}.`,
+			});
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : "Failed to retry sync.";
+			setRecentTransactions((prev) =>
+				prev.map((item) =>
+					item.id === transaction.id
+						? {
+							...item,
+							sync_status: "failed",
+							sync_error: errorMessage,
+						}
+						: item
+				)
+			);
+			setFoundTransaction((prev) =>
+				prev && prev.id === transaction.id
+					? {
+						...prev,
+						sync_status: "failed",
+						sync_error: errorMessage,
+					}
+					: prev
+			);
+			setSyncMessage({
+				type: "error",
+				text: errorMessage,
+			});
+		} finally {
+			setRetryingSyncTransactions((prev) => ({
+				...prev,
+				[transaction.id]: false,
+			}));
 		}
 	};
 
@@ -490,13 +660,14 @@ export default function AdminPage() {
 			</div>
 
 			{reprintMessage ? <div style={messageStyle(reprintMessage.type)}>{reprintMessage.text}</div> : null}
+			{syncMessage ? <div style={messageStyle(syncMessage.type)}>{syncMessage.text}</div> : null}
 
 			{isLoading ? <p style={{ margin: 0, color: "#475569" }}>Loading data...</p> : null}
 			{loadError ? <div style={messageStyle("error")}>{loadError}</div> : null}
 
 			{!isLoading && !loadError ? (
 				<div style={{ overflowX: "auto" }}>
-					<table style={{ width: "100%", borderCollapse: "collapse", minWidth: 780 }}>
+					<table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
 						<thead>
 							<tr>
 								<th style={{ textAlign: "left", padding: "10px 8px", borderBottom: "1px solid #e2e8f0", color: "#334155" }}>ID</th>
@@ -505,6 +676,7 @@ export default function AdminPage() {
 								<th style={{ textAlign: "left", padding: "10px 8px", borderBottom: "1px solid #e2e8f0", color: "#334155" }}>Units</th>
 								<th style={{ textAlign: "left", padding: "10px 8px", borderBottom: "1px solid #e2e8f0", color: "#334155" }}>Due</th>
 								<th style={{ textAlign: "left", padding: "10px 8px", borderBottom: "1px solid #e2e8f0", color: "#334155" }}>Paid</th>
+								<th style={{ textAlign: "left", padding: "10px 8px", borderBottom: "1px solid #e2e8f0", color: "#334155" }}>Sync</th>
 								<th style={{ textAlign: "left", padding: "10px 8px", borderBottom: "1px solid #e2e8f0", color: "#334155" }}>Created At</th>
 								<th style={{ textAlign: "left", padding: "10px 8px", borderBottom: "1px solid #e2e8f0", color: "#334155" }}>Action</th>
 							</tr>
@@ -512,40 +684,75 @@ export default function AdminPage() {
 						<tbody>
 							{recentTransactions.length === 0 ? (
 								<tr>
-									<td style={{ padding: "14px 8px", color: "#64748b" }} colSpan={8}>
+									<td style={{ padding: "14px 8px", color: "#64748b" }} colSpan={9}>
 										No recent transactions.
 									</td>
 								</tr>
 							) : (
-								recentTransactions.map((transaction) => (
-									<tr key={transaction.id}>
-										<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9" }}>{transaction.id}</td>
-										<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9", fontWeight: 600 }}>{transaction.ticket_label}</td>
-										<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9" }}>{transaction.facility_name}</td>
-										<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9" }}>{transaction.total_units}</td>
-										<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9" }}>{formatCurrency(transaction.amount_due)}</td>
-										<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9" }}>{formatCurrency(transaction.amount_paid)}</td>
-										<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9" }}>{transaction.created_at}</td>
-										<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9" }}>
-											<button
-												type="button"
-												onClick={() => handleReprint(transaction)}
-												disabled={Boolean(reprintingTransactions[transaction.id])}
-												style={{
-													padding: "8px 12px",
-													borderRadius: 10,
-													border: "none",
-													background: "#0f766e",
-													color: "#ffffff",
-													fontWeight: 600,
-													cursor: reprintingTransactions[transaction.id] ? "not-allowed" : "pointer",
-												}}
-											>
-												{reprintingTransactions[transaction.id] ? "Reprinting..." : "Reprint"}
-											</button>
-										</td>
-									</tr>
-								))
+								recentTransactions.map((transaction) => {
+									const syncStatus = normalizeSyncStatus(transaction.sync_status);
+									const canRetrySync = syncStatus === "failed" || syncStatus === "pending";
+
+									return (
+										<tr key={transaction.id}>
+											<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9" }}>{transaction.id}</td>
+											<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9", fontWeight: 600 }}>{transaction.ticket_label}</td>
+											<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9" }}>{transaction.facility_name}</td>
+											<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9" }}>{transaction.total_units}</td>
+											<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9" }}>{formatCurrency(transaction.amount_due)}</td>
+											<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9" }}>{formatCurrency(transaction.amount_paid)}</td>
+											<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9", verticalAlign: "top" }}>
+												<div style={{ display: "grid", gap: 6, justifyItems: "start" }}>
+													<span style={getSyncBadgeStyle(syncStatus)}>{syncStatus}</span>
+													{syncStatus === "failed" && transaction.sync_error ? (
+														<span style={{ fontSize: 11, color: "#991b1b", lineHeight: 1.35, maxWidth: 160 }}>
+															{transaction.sync_error}
+														</span>
+													) : null}
+												</div>
+											</td>
+											<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9" }}>{transaction.created_at}</td>
+											<td style={{ padding: "10px 8px", borderBottom: "1px solid #f1f5f9" }}>
+												<div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+													<button
+														type="button"
+														onClick={() => handleReprint(transaction)}
+														disabled={Boolean(reprintingTransactions[transaction.id])}
+														style={{
+															padding: "8px 12px",
+															borderRadius: 10,
+															border: "none",
+															background: "#0f766e",
+															color: "#ffffff",
+															fontWeight: 600,
+															cursor: reprintingTransactions[transaction.id] ? "not-allowed" : "pointer",
+														}}
+													>
+														{reprintingTransactions[transaction.id] ? "Reprinting..." : "Reprint"}
+													</button>
+													{canRetrySync ? (
+														<button
+															type="button"
+															onClick={() => handleRetrySync(transaction)}
+															disabled={Boolean(retryingSyncTransactions[transaction.id])}
+															style={{
+																padding: "8px 12px",
+																borderRadius: 10,
+																border: "1px solid #2563eb",
+																background: "#eff6ff",
+																color: "#1d4ed8",
+																fontWeight: 700,
+																cursor: retryingSyncTransactions[transaction.id] ? "not-allowed" : "pointer",
+															}}
+														>
+															{retryingSyncTransactions[transaction.id] ? "Retrying..." : "Retry Sync"}
+														</button>
+													) : null}
+												</div>
+											</td>
+										</tr>
+									);
+								})
 							)}
 						</tbody>
 					</table>

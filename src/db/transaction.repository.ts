@@ -45,10 +45,13 @@ export class TransactionRepository {
 					print_status,
 					print_attempts,
 					source_mode,
+					sync_status,
+					synced_at,
+					sync_error,
 					error_message,
 					created_at
 				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`
 		);
 
@@ -85,6 +88,9 @@ export class TransactionRepository {
 				input.printStatus ?? "printed",
 				input.printAttempts ?? 1,
 				input.sourceMode ?? "hardware_live",
+				input.syncStatus ?? "pending",
+				input.syncedAt ?? null,
+				input.syncError ?? null,
 				input.errorMessage ?? null,
 				input.createdAt
 			);
@@ -106,6 +112,49 @@ export class TransactionRepository {
 		});
 
 		return execute(record);
+	}
+
+	markTransactionSynced(localTransactionId: number) {
+		const statement = this.database.prepare(
+			`
+				UPDATE transactions
+				SET
+					sync_status = 'synced',
+					synced_at = ?,
+					sync_error = NULL
+				WHERE id = ?
+			`
+		);
+
+		return statement.run(new Date().toISOString(), localTransactionId);
+	}
+
+	markTransactionSyncFailed(localTransactionId: number, errorMessage: string) {
+		const statement = this.database.prepare(
+			`
+				UPDATE transactions
+				SET
+					sync_status = 'failed',
+					sync_error = ?
+				WHERE id = ?
+			`
+		);
+
+		return statement.run(errorMessage, localTransactionId);
+	}
+
+	getTransactionsBySyncStatus(syncStatus: string, limit: number = 50) {
+		const statement = this.database.prepare(
+			`
+				SELECT *
+				FROM transactions
+				WHERE sync_status = ?
+				ORDER BY id DESC
+				LIMIT ?
+			`
+		);
+
+		return statement.all(syncStatus, limit);
 	}
 
 	getRecentTransactions(limit: number = 20) {

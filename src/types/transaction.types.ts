@@ -26,6 +26,9 @@ export type TransactionRecord = {
   printStatus?: string;
   printAttempts?: number;
   sourceMode?: string;
+  syncStatus?: string;
+  syncedAt?: string | null;
+  syncError?: string | null;
   errorMessage?: string | null;
   breakdown: TransactionBreakdownItem[];
   createdAt: string;

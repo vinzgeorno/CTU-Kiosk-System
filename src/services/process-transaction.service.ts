@@ -73,10 +73,18 @@ export class ProcessTransactionService {
     // Failures here must not affect the successful local transaction flow.
     try {
       await this.supabaseSyncService.syncTransactionWithBreakdown(record, transactionId);
+      this.transactionRepository.markTransactionSynced(transactionId);
+      record.syncStatus = "synced";
+      record.syncedAt = new Date().toISOString();
+      record.syncError = null;
     } catch (syncError) {
+      const syncErrorMessage = syncError instanceof Error ? syncError.message : String(syncError);
+      this.transactionRepository.markTransactionSyncFailed(transactionId, syncErrorMessage);
+      record.syncStatus = "failed";
+      record.syncError = syncErrorMessage;
       console.error(
         `[Supabase Sync] Failed to sync transaction ${transactionId}:`,
-        syncError instanceof Error ? syncError.message : syncError
+        syncErrorMessage
       );
     }
 

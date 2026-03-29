@@ -23,6 +23,9 @@ CREATE TABLE IF NOT EXISTS transactions (
 	print_status TEXT NOT NULL DEFAULT 'printed',
 	print_attempts INTEGER NOT NULL DEFAULT 1 CHECK (print_attempts >= 0),
 	source_mode TEXT NOT NULL DEFAULT 'hardware_live',
+	sync_status TEXT NOT NULL DEFAULT 'pending',
+	synced_at TEXT,
+	sync_error TEXT,
 	error_message TEXT,
 	created_at TEXT NOT NULL,
 	CHECK (duration_ms IS NULL OR duration_ms >= 0),
@@ -88,6 +91,12 @@ CREATE INDEX IF NOT EXISTS idx_transactions_created_at
 
 CREATE INDEX IF NOT EXISTS idx_transactions_session_id
 	ON transactions (session_id);
+
+CREATE INDEX IF NOT EXISTS idx_transactions_sync_status
+	ON transactions (sync_status);
+
+CREATE INDEX IF NOT EXISTS idx_transactions_synced_at
+	ON transactions (synced_at);
 
 CREATE INDEX IF NOT EXISTS idx_transaction_breakdown_transaction_id
 	ON transaction_breakdown (transaction_id);

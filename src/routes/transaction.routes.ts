@@ -33,6 +33,11 @@ type RecentTransactionsQuery = {
 	limit?: string | number;
 };
 
+type UnsyncedTransactionsQuery = {
+	status?: string;
+	limit?: string | number;
+};
+
 type FacilitySummaryReportQuery = {
 	startAt?: string;
 	endAt?: string;
@@ -67,6 +72,10 @@ type ReprintTransactionParams = {
 	id?: string;
 };
 
+type RetryTransactionSyncParams = {
+	id?: string;
+};
+
 type GetTransactionByTicketLabelParams = {
 	ticketLabel?: string;
 };
@@ -90,9 +99,55 @@ type TransactionRowWithBreakdown = {
 	total_units: number;
 	amount_due: number;
 	amount_paid: number;
+	session_id?: string | null;
+	started_at?: string | null;
+	completed_at?: string | null;
+	duration_ms?: number | null;
+	payment_status?: string | null;
+	print_status?: string | null;
+	print_attempts?: number | null;
+	source_mode?: string | null;
+	sync_status?: string | null;
+	synced_at?: string | null;
+	sync_error?: string | null;
+	error_message?: string | null;
 	created_at: string;
 	breakdown: TransactionBreakdownRow[];
 };
+
+function mapTransactionRowToRecord(transaction: TransactionRowWithBreakdown): TransactionRecord {
+	return {
+		facilityCode: transaction.facility_code as any,
+		facilityName: transaction.facility_name,
+		ticketStartNo: transaction.ticket_start_no,
+		ticketEndNo: transaction.ticket_end_no,
+		ticketLabel: transaction.ticket_label,
+		isBulk: Boolean(transaction.is_bulk),
+		totalUnits: transaction.total_units,
+		amountDue: transaction.amount_due,
+		amountPaid: transaction.amount_paid,
+		sessionId: transaction.session_id ?? undefined,
+		startedAt: transaction.started_at ?? undefined,
+		completedAt: transaction.completed_at ?? undefined,
+		durationMs: transaction.duration_ms ?? undefined,
+		paymentStatus: transaction.payment_status ?? undefined,
+		printStatus: transaction.print_status ?? undefined,
+		printAttempts: transaction.print_attempts ?? undefined,
+		sourceMode: transaction.source_mode ?? undefined,
+		syncStatus: transaction.sync_status ?? undefined,
+		syncedAt: transaction.synced_at ?? null,
+		syncError: transaction.sync_error ?? null,
+		errorMessage: transaction.error_message ?? null,
+		breakdown: transaction.breakdown.map((item) => ({
+			categoryCode: item.category_code as any,
+			categoryLabel: item.category_label,
+			quantity: item.quantity,
+			unitPrice: item.unit_price,
+			subtotal: item.subtotal,
+		})),
+		createdAt: transaction.created_at,
+	};
+}
 
 export default async function transactionRoutes(fastify: any) {
 	const ticketCounterRepository = new TicketCounterRepository(db);
@@ -416,6 +471,42 @@ export default async function transactionRoutes(fastify: any) {
 	);
 
 	fastify.get(
+		"/transactions/unsynced",
+		async (request: { query: UnsyncedTransactionsQuery }, reply: any) => {
+			const status =
+				typeof request.query?.status === "string" && request.query.status.trim() !== ""
+					? request.query.status.trim()
+					: "failed";
+			const rawLimit = request.query?.limit;
+			const parsedLimit = rawLimit === undefined ? 20 : Number(rawLimit);
+
+			if (!Number.isFinite(parsedLimit) || parsedLimit < 1) {
+				return reply.status(400).send({
+					success: false,
+					message: "Invalid limit",
+				});
+			}
+
+			try {
+				const transactions = transactionRepository.getTransactionsBySyncStatus(
+					status,
+					parsedLimit
+				);
+
+				return {
+					success: true,
+					transactions,
+				};
+			} catch (error) {
+				return reply.status(500).send({
+					success: false,
+					message: error instanceof Error ? error.message : "Unknown error",
+				});
+			}
+		}
+	);
+
+	fastify.get(
 		"/transactions/stats",
 		async (_request: any, reply: any) => {
 			try {
@@ -608,6 +699,52 @@ export default async function transactionRoutes(fastify: any) {
 	);
 
 	fastify.post(
+		"/transactions/:id/retry-sync",
+		async (request: { params: RetryTransactionSyncParams }, reply: any) => {
+			const rawId = request.params?.id;
+			const id = Number(rawId);
+
+			if (!Number.isInteger(id) || id <= 0) {
+				return reply.status(400).send({
+					success: false,
+					message: "id must be a valid positive number.",
+				});
+			}
+
+			try {
+				const transaction = transactionRepository.getTransactionById(id) as
+					| TransactionRowWithBreakdown
+					| null;
+
+				if (!transaction) {
+					return reply.status(404).send({
+						success: false,
+						message: "Transaction not found",
+					});
+				}
+
+				const record = mapTransactionRowToRecord(transaction);
+
+				await supabaseSyncService.syncTransactionWithBreakdown(record, id);
+				transactionRepository.markTransactionSynced(id);
+
+				return {
+					success: true,
+					message: `Transaction ${id} synced successfully.`,
+				};
+			} catch (error) {
+				const errorMessage = error instanceof Error ? error.message : "Unknown error";
+				transactionRepository.markTransactionSyncFailed(id, errorMessage);
+
+				return reply.status(500).send({
+					success: false,
+					message: errorMessage,
+				});
+			}
+		}
+	);
+
+	fastify.post(
 		"/transactions/:id/reprint",
 		async (request: { params: ReprintTransactionParams }, reply: any) => {
 			const rawId = request.params?.id;
@@ -632,25 +769,7 @@ export default async function transactionRoutes(fastify: any) {
 					});
 				}
 
-				const record: TransactionRecord = {
-					facilityCode: transaction.facility_code as any,
-					facilityName: transaction.facility_name,
-					ticketStartNo: transaction.ticket_start_no,
-					ticketEndNo: transaction.ticket_end_no,
-					ticketLabel: transaction.ticket_label,
-					isBulk: Boolean(transaction.is_bulk),
-					totalUnits: transaction.total_units,
-					amountDue: transaction.amount_due,
-					amountPaid: transaction.amount_paid,
-					breakdown: transaction.breakdown.map((item) => ({
-						categoryCode: item.category_code as any,
-						categoryLabel: item.category_label,
-						quantity: item.quantity,
-						unitPrice: item.unit_price,
-						subtotal: item.subtotal,
-					})),
-					createdAt: transaction.created_at,
-				};
+				const record = mapTransactionRowToRecord(transaction);
 
 				const printableData = mapTransactionToPrintableTicketData(record);
 				const printResult = await printerService.printTicket(printableData);

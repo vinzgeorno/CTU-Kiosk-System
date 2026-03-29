@@ -32,7 +32,9 @@ export class SupabaseSyncService {
 
 		const { error: transactionError } = await supabase
 			.from("transactions")
-			.insert(transactionRow);
+			.upsert(transactionRow, {
+				onConflict: "local_transaction_id",
+			});
 
 		if (transactionError) {
 			throw new Error(`Failed to sync transaction to Supabase: ${transactionError.message}`);
@@ -53,7 +55,9 @@ export class SupabaseSyncService {
 
 		const { error: breakdownError } = await supabase
 			.from("transaction_breakdown")
-			.insert(breakdownRows);
+			.upsert(breakdownRows, {
+				onConflict: "local_transaction_id,category_code",
+			});
 
 		if (breakdownError) {
 			throw new Error(`Failed to sync transaction breakdown to Supabase: ${breakdownError.message}`);
