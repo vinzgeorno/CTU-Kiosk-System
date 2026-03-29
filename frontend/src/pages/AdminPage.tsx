@@ -105,11 +105,18 @@ const formatDuration = (value: number) => {
 };
 
 const createDefaultReportWindow = () => {
-	const start = new Date();
-	start.setHours(9, 0, 0, 0);
+	const now = new Date();
+	const todayAtNine = new Date(now);
+	todayAtNine.setHours(9, 0, 0, 0);
 
-	const end = new Date(start);
-	end.setDate(end.getDate() + 1);
+	const start = new Date(todayAtNine);
+	const end = new Date(todayAtNine);
+
+	if (now < todayAtNine) {
+		start.setDate(start.getDate() - 1);
+	} else {
+		end.setDate(end.getDate() + 1);
+	}
 
 	return {
 		start,

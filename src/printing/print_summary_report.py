@@ -83,7 +83,10 @@ def build_ticket_range(row):
 	if first_ticket == "-" and last_ticket == "-":
 		return "-"
 
-	if first_ticket == last_ticket:
+	if first_ticket == "-":
+		return last_ticket
+
+	if last_ticket == "-":
 		return first_ticket
 
 	return f"{first_ticket} to {last_ticket}"
@@ -137,10 +140,10 @@ def print_summary_report(data):
 				print_separator(printer)
 
 		print_separator(printer, "=")
-		printer.text("DAILY TOTALS\n")
-		printer.text(f"TXNS : {grand_transaction_count}\n")
-		printer.text(f"UNITS: {grand_total_units}\n")
-		printer.text(f"AMT  : PHP {grand_total_amount:.2f}\n")
+		printer.text("GRAND TOTALS\n")
+		printer.text(f"TOTAL TRANSACTIONS: {grand_transaction_count}\n")
+		printer.text(f"TOTAL UNITS: {grand_total_units}\n")
+		printer.text(f"TOTAL SALES: PHP {grand_total_amount:.2f}\n")
 		print_separator(printer)
 		print_wrapped(printer, generated_at, prefix="GEN  : ")
 
