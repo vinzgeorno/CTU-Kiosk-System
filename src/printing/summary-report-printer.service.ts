@@ -7,7 +7,9 @@ export class SummaryReportPrinterService {
 
 	constructor(pythonScriptPath?: string) {
 		const defaultScriptPath = path.join(__dirname, "print_summary_report.py");
-		this.scriptPath = pythonScriptPath ?? env.PRINT_SCRIPT_PATH ?? defaultScriptPath;
+		const configuredScriptPath = env.SUMMARY_PRINT_SCRIPT_PATH.trim();
+		this.scriptPath =
+			pythonScriptPath ?? (configuredScriptPath || defaultScriptPath);
 	}
 
 	async printReport(data: unknown): Promise<any> {
