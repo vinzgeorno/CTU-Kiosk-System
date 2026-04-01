@@ -8,9 +8,13 @@ Usage: python3 print_ticket.py <json_data>
 import sys
 import json
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from escpos.printer import Usb
 from PIL import Image
 import qrcode
+
+
+TAIPEI_TZ = ZoneInfo("Asia/Taipei")
 
 
 def to_float(value, default=0.0):
@@ -33,21 +37,30 @@ def to_int(value, default=0):
 
 def parse_created_at(value):
     if not value:
-        return datetime.now()
+        return datetime.now(TAIPEI_TZ)
+
+    parsed = None
 
     if isinstance(value, datetime):
-        return value
+        parsed = value
 
-    if not isinstance(value, str):
+    elif isinstance(value, str):
+        normalized = value.replace("Z", "+00:00")
+        parsed = datetime.fromisoformat(normalized)
+
+    else:
         raise ValueError("createdAt must be a valid ISO date string.")
 
-    normalized = value.replace("Z", "+00:00")
-    return datetime.fromisoformat(normalized)
+    if parsed.tzinfo is None:
+        # Treat naive payload timestamps as Asia/Taipei local time.
+        return parsed.replace(tzinfo=TAIPEI_TZ)
+
+    return parsed.astimezone(TAIPEI_TZ)
 
 
 def format_created_at(value):
     if not value:
-        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return datetime.now(TAIPEI_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
     try:
         parsed = parse_created_at(value)
@@ -76,7 +89,8 @@ def print_ticket(data):
 
         # Extract data
         facility_name = str(data.get("facilityName") or data.get("facilityCode") or "")
-        ticket_label = str(data.get("ticketLabel") or "")
+        ticket_label_raw = data.get("ticketLabel")
+        ticket_label = "" if ticket_label_raw is None else str(ticket_label_raw)
         total_units = to_int(data.get("totalUnits"), default=0)
         amount_due = to_float(data.get("amountDue"), default=0.0)
         amount_paid = to_float(data.get("amountPaid"), default=0.0)

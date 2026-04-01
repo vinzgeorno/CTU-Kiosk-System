@@ -49,9 +49,9 @@ last_publish_time = 0
 # ── Coin config ───────────────────────────────────────────────────
 coin_pulse_count = 0
 coin_last_pulse_time = 0.0
-COIN_GAP_TIMEOUT = 0.5   # 500ms gap = end of coin pulse burst
-COIN_DEBOUNCE_MS = 50
-COIN_MIN_PULSE_WIDTH = 0.02  # 20ms minimum pulse width to filter noise
+COIN_GAP_TIMEOUT = 0.15   # 200ms gap = end of coin pulse burst
+COIN_DEBOUNCE_MS = 20
+COIN_MIN_PULSE_WIDTH = 0.012  # 20ms minimum pulse width to filter noise
 
 PULSE_TO_VALUE = {
     1: 1,
@@ -106,12 +106,15 @@ PULSE_TO_VALUE = {
     50: 50,
 }
 
+# Extend support for higher pulse counts while preserving existing explicit mappings.
+PULSE_TO_VALUE.update({pulse: pulse for pulse in range(51, 101)})
+
 # ── Bill config ───────────────────────────────────────────────────
 bill_pulse_count = 0
 bill_last_pulse_time = 0.0
-BILL_DONE_TIMEOUT = 1.5    # 1500ms gap = end of bill pulse burst (increased to capture all pulses from slow bill acceptors)
-BILL_DEBOUNCE_MS = 40      # 40ms debounce - balances noise filtering with pulse capture (bills come faster than 80ms)
-BILL_MIN_PULSE_WIDTH = 0.02  # 20ms minimum pulse width to filter noise
+BILL_DONE_TIMEOUT = 1    # 1500ms gap = end of bill pulse burst (increased to capture all pulses from slow bill acceptors)
+BILL_DEBOUNCE_MS = 15      # 40ms debounce - balances noise filtering with pulse capture (bills come faster than 80ms)
+BILL_MIN_PULSE_WIDTH = 0.015  # 20ms minimum pulse width to filter noise
 
 # Bill denominations and their typical pulse counts (for rounding to closest value)
 BILL_DENOMINATIONS = {

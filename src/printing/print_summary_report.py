@@ -8,10 +8,12 @@ Usage: python3 print_summary_report.py <json_data>
 import sys
 import json
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from escpos.printer import Usb
 
 
 LINE_WIDTH = 32
+TAIPEI_TZ = ZoneInfo("Asia/Taipei")
 
 
 def to_float(value, default=0.0):
@@ -34,17 +36,27 @@ def to_int(value, default=0):
 
 def format_datetime(value):
 	if not value:
-		return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+		return datetime.now(TAIPEI_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
-	if not isinstance(value, str):
+	parsed = None
+
+	if isinstance(value, datetime):
+		parsed = value
+	elif isinstance(value, str):
+		normalized = value.replace("Z", "+00:00")
+		try:
+			parsed = datetime.fromisoformat(normalized)
+		except ValueError:
+			return value
+	else:
 		return str(value)
 
-	try:
-		normalized = value.replace("Z", "+00:00")
-		parsed = datetime.fromisoformat(normalized)
-		return parsed.strftime("%Y-%m-%d %H:%M:%S")
-	except ValueError:
-		return value
+	if parsed.tzinfo is None:
+		parsed = parsed.replace(tzinfo=TAIPEI_TZ)
+	else:
+		parsed = parsed.astimezone(TAIPEI_TZ)
+
+	return parsed.strftime("%Y-%m-%d %H:%M:%S")
 
 
 def safe_text(value, default="-"):

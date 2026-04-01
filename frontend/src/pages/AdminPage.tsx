@@ -104,26 +104,133 @@ const formatDuration = (value: number) => {
 	return `${milliseconds}ms`;
 };
 
-const createDefaultReportWindow = () => {
+type ReportRangeInputs = {
+	startDate: string;
+	startTime: string;
+	endDate: string;
+	endTime: string;
+};
+
+const padDateTimePart = (value: number) => String(value).padStart(2, "0");
+
+const formatDateInputValue = (value: Date) => {
+	return `${value.getFullYear()}-${padDateTimePart(value.getMonth() + 1)}-${padDateTimePart(value.getDate())}`;
+};
+
+const formatTimeInputValue = (value: Date) => {
+	return `${padDateTimePart(value.getHours())}:${padDateTimePart(value.getMinutes())}`;
+};
+
+const createReportRangeInputs = (start: Date, end: Date): ReportRangeInputs => ({
+	startDate: formatDateInputValue(start),
+	startTime: formatTimeInputValue(start),
+	endDate: formatDateInputValue(end),
+	endTime: formatTimeInputValue(end),
+});
+
+const createDefaultReportInputs = () => {
 	const now = new Date();
-	const todayAtNine = new Date(now);
-	todayAtNine.setHours(9, 0, 0, 0);
+	const start = new Date(now);
+	start.setHours(0, 0, 0, 0);
 
-	const start = new Date(todayAtNine);
-	const end = new Date(todayAtNine);
+	return createReportRangeInputs(start, now);
+};
 
-	if (now < todayAtNine) {
-		start.setDate(start.getDate() - 1);
-	} else {
-		end.setDate(end.getDate() + 1);
+const buildLocalDateTime = (dateValue: string, timeValue: string) => {
+	if (!dateValue || !timeValue) {
+		return null;
+	}
+
+	const [yearText, monthText, dayText] = dateValue.split("-");
+	const [hourText, minuteText] = timeValue.split(":");
+	const year = Number(yearText);
+	const month = Number(monthText);
+	const day = Number(dayText);
+	const hour = Number(hourText);
+	const minute = Number(minuteText);
+
+	if (
+		![year, month, day, hour, minute].every((part) => Number.isInteger(part)) ||
+		month < 1 ||
+		month > 12 ||
+		day < 1 ||
+		day > 31 ||
+		hour < 0 ||
+		hour > 23 ||
+		minute < 0 ||
+		minute > 59
+	) {
+		return null;
+	}
+
+	const result = new Date(year, month - 1, day, hour, minute, 0, 0);
+
+	if (
+		Number.isNaN(result.getTime()) ||
+		result.getFullYear() !== year ||
+		result.getMonth() !== month - 1 ||
+		result.getDate() !== day ||
+		result.getHours() !== hour ||
+		result.getMinutes() !== minute
+	) {
+		return null;
+	}
+
+	return result;
+};
+
+const buildReportPeriodFromInputs = (inputs: ReportRangeInputs) => {
+	const start = buildLocalDateTime(inputs.startDate, inputs.startTime);
+	const end = buildLocalDateTime(inputs.endDate, inputs.endTime);
+
+	if (!start || !end) {
+		return {
+			error: "Select a valid start and end date/time.",
+			startAt: null,
+			endAt: null,
+		};
+	}
+
+	if (start > end) {
+		return {
+			error: "Report start must be earlier than or equal to the report end.",
+			startAt: null,
+			endAt: null,
+		};
 	}
 
 	return {
-		start,
-		end,
+		error: null,
 		startAt: start.toISOString(),
 		endAt: end.toISOString(),
 	};
+};
+
+const getStartOfCurrentWeek = (value: Date) => {
+	const result = new Date(value);
+	const dayOfWeek = result.getDay();
+	const offset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+
+	result.setDate(result.getDate() - offset);
+	result.setHours(0, 0, 0, 0);
+
+	return result;
+};
+
+const getStartOfCurrentMonth = (value: Date) => {
+	const result = new Date(value);
+	result.setDate(1);
+	result.setHours(0, 0, 0, 0);
+
+	return result;
+};
+
+const getStartOfCurrentYear = (value: Date) => {
+	const result = new Date(value);
+	result.setMonth(0, 1);
+	result.setHours(0, 0, 0, 0);
+
+	return result;
 };
 
 const formatReportPeriod = (value: string | null) => {
@@ -314,6 +421,7 @@ export default function AdminPage() {
 	const [facilitySummaryRows, setFacilitySummaryRows] = useState<FacilitySummaryReportRow[]>([]);
 	const [isLoadingFacilityReport, setIsLoadingFacilityReport] = useState(false);
 	const [facilityReportError, setFacilityReportError] = useState<string | null>(null);
+	const [reportRangeInputs, setReportRangeInputs] = useState<ReportRangeInputs>(() => createDefaultReportInputs());
 	const [facilityReportPrintMessage, setFacilityReportPrintMessage] = useState<{
 		type: "success" | "error";
 		text: string;
@@ -323,6 +431,7 @@ export default function AdminPage() {
 		startAt: null,
 		endAt: null,
 	});
+	const [facilityReportTitle, setFacilityReportTitle] = useState("Facility Summary Report");
 
 	const loadCounters = async () => {
 		const countersResult = await getTicketCounters();
@@ -545,13 +654,12 @@ export default function AdminPage() {
 		}
 	};
 
-	const handleLoadFacilityReport = async () => {
-		const { startAt, endAt } = createDefaultReportWindow();
-
+	const loadFacilityReport = async (startAt: string, endAt: string, reportTitle: string) => {
 		setIsLoadingFacilityReport(true);
 		setFacilityReportError(null);
 		setFacilityReportPrintMessage(null);
 		setFacilityReportPeriod({ startAt, endAt });
+		setFacilityReportTitle(reportTitle);
 
 		try {
 			const result = await getFacilitySummaryReport(startAt, endAt);
@@ -568,6 +676,48 @@ export default function AdminPage() {
 		}
 	};
 
+	const handleReportInputChange = (field: keyof ReportRangeInputs, value: string) => {
+		setReportRangeInputs((prev) => ({
+			...prev,
+			[field]: value,
+		}));
+	};
+
+	const handleLoadFacilityReport = async () => {
+		const reportPeriod = buildReportPeriodFromInputs(reportRangeInputs);
+
+		if (reportPeriod.error || !reportPeriod.startAt || !reportPeriod.endAt) {
+			setFacilitySummaryRows([]);
+			setFacilityReportPrintMessage(null);
+			setFacilityReportError(reportPeriod.error ?? "Invalid report period.");
+			return;
+		}
+
+		await loadFacilityReport(reportPeriod.startAt, reportPeriod.endAt, "Facility Summary Report");
+	};
+
+	const handleLoadShortcutReport = async (type: "weekly" | "monthly" | "yearly") => {
+		const now = new Date();
+		const start =
+			type === "weekly"
+				? getStartOfCurrentWeek(now)
+				: type === "monthly"
+					? getStartOfCurrentMonth(now)
+					: getStartOfCurrentYear(now);
+
+		setReportRangeInputs(createReportRangeInputs(start, now));
+
+		await loadFacilityReport(
+			start.toISOString(),
+			now.toISOString(),
+			type === "weekly"
+				? "Weekly Facility Summary"
+				: type === "monthly"
+					? "Monthly Facility Summary"
+					: "Yearly Facility Summary"
+		);
+	};
+
 	const handlePrintFacilityReport = async () => {
 		if (!facilityReportPeriod.startAt || !facilityReportPeriod.endAt || facilitySummaryRows.length === 0) {
 			return;
@@ -578,7 +728,7 @@ export default function AdminPage() {
 
 		try {
 			await printFacilitySummaryReport({
-				reportTitle: "9AM-9AM Facility Summary",
+				reportTitle: facilityReportTitle,
 				startAt: facilityReportPeriod.startAt,
 				endAt: facilityReportPeriod.endAt,
 				rows: facilitySummaryRows,
@@ -977,13 +1127,37 @@ export default function AdminPage() {
 				<div>
 					<h2 style={{ margin: 0, fontSize: 22, color: "#0f172a" }}>Reports</h2>
 					<p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 14 }}>
-						Load a 9AM-to-9AM facility summary for the current operating day.
+						Load facility summaries for any selected period or use quick weekly, monthly, and yearly ranges.
 					</p>
 				</div>
-				<div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+				<div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+					{[
+						{ key: "weekly", label: "Weekly" },
+						{ key: "monthly", label: "Monthly" },
+						{ key: "yearly", label: "Yearly" },
+					].map((shortcut) => (
+						<button
+							key={shortcut.key}
+							type="button"
+							onClick={() => void handleLoadShortcutReport(shortcut.key as "weekly" | "monthly" | "yearly")}
+							disabled={isLoadingFacilityReport}
+							style={{
+								padding: "9px 12px",
+								borderRadius: 10,
+								border: "1px solid #cbd5e1",
+								background: "#ffffff",
+								color: "#334155",
+								fontWeight: 700,
+								fontSize: 13,
+								cursor: isLoadingFacilityReport ? "not-allowed" : "pointer",
+							}}
+						>
+							{shortcut.label}
+						</button>
+					))}
 					<button
 						type="button"
-						onClick={handleLoadFacilityReport}
+						onClick={() => void handleLoadFacilityReport()}
 						disabled={isLoadingFacilityReport}
 						style={{
 							padding: "10px 14px",
@@ -996,7 +1170,7 @@ export default function AdminPage() {
 							cursor: isLoadingFacilityReport ? "not-allowed" : "pointer",
 						}}
 					>
-						{isLoadingFacilityReport ? "Loading Report..." : "Load 9AM-9AM Report"}
+						{isLoadingFacilityReport ? "Loading Report..." : "Load Report"}
 					</button>
 					{facilitySummaryRows.length > 0 ? (
 						<button
@@ -1023,7 +1197,7 @@ export default function AdminPage() {
 			<div
 				style={{
 					display: "grid",
-					gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+					gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
 					gap: 10,
 					padding: 14,
 					borderRadius: 12,
@@ -1031,17 +1205,97 @@ export default function AdminPage() {
 					border: "1px solid #e2e8f0",
 				}}
 			>
+				<div style={{ display: "grid", gap: 4 }}>
+					<label style={{ fontSize: 12, color: "#64748b" }} htmlFor="report-start-date">
+						Start Date
+					</label>
+					<input
+						id="report-start-date"
+						type="date"
+						value={reportRangeInputs.startDate}
+						onChange={(event) => handleReportInputChange("startDate", event.target.value)}
+						style={{
+							padding: "8px 10px",
+							borderRadius: 10,
+							border: "1px solid #cbd5e1",
+							fontSize: 13,
+							background: "#ffffff",
+							color: "#0f172a",
+						}}
+					/>
+				</div>
+				<div style={{ display: "grid", gap: 4 }}>
+					<label style={{ fontSize: 12, color: "#64748b" }} htmlFor="report-start-time">
+						Start Time
+					</label>
+					<input
+						id="report-start-time"
+						type="time"
+						value={reportRangeInputs.startTime}
+						onChange={(event) => handleReportInputChange("startTime", event.target.value)}
+						style={{
+							padding: "8px 10px",
+							borderRadius: 10,
+							border: "1px solid #cbd5e1",
+							fontSize: 13,
+							background: "#ffffff",
+							color: "#0f172a",
+						}}
+					/>
+				</div>
+				<div style={{ display: "grid", gap: 4 }}>
+					<label style={{ fontSize: 12, color: "#64748b" }} htmlFor="report-end-date">
+						End Date
+					</label>
+					<input
+						id="report-end-date"
+						type="date"
+						value={reportRangeInputs.endDate}
+						onChange={(event) => handleReportInputChange("endDate", event.target.value)}
+						style={{
+							padding: "8px 10px",
+							borderRadius: 10,
+							border: "1px solid #cbd5e1",
+							fontSize: 13,
+							background: "#ffffff",
+							color: "#0f172a",
+						}}
+					/>
+				</div>
+				<div style={{ display: "grid", gap: 4 }}>
+					<label style={{ fontSize: 12, color: "#64748b" }} htmlFor="report-end-time">
+						End Time
+					</label>
+					<input
+						id="report-end-time"
+						type="time"
+						value={reportRangeInputs.endTime}
+						onChange={(event) => handleReportInputChange("endTime", event.target.value)}
+						style={{
+							padding: "8px 10px",
+							borderRadius: 10,
+							border: "1px solid #cbd5e1",
+							fontSize: 13,
+							background: "#ffffff",
+							color: "#0f172a",
+						}}
+					/>
+				</div>
 				<div>
-					<div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Report Start</div>
+					<div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Loaded Start</div>
 					<div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a" }}>
 						{formatReportPeriod(facilityReportPeriod.startAt)}
 					</div>
 				</div>
 				<div>
-					<div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Report End</div>
+					<div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Loaded End</div>
 					<div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a" }}>
 						{formatReportPeriod(facilityReportPeriod.endAt)}
 					</div>
+				</div>
+				<div>
+					<div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Loaded Report</div>
+					<div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{facilityReportTitle}</div>
 				</div>
 			</div>
 
@@ -1055,8 +1309,8 @@ export default function AdminPage() {
 			) : facilitySummaryRows.length === 0 ? (
 				<div style={emptyStateStyle}>
 					{facilityReportPeriod.startAt && facilityReportPeriod.endAt
-						? "No facility summary rows found for the selected 9AM-to-9AM report window."
-						: "Load the 9AM-to-9AM report to view facility ticket and transaction totals."}
+						? "No facility summary rows found for the selected report period."
+						: "Choose a start and end date/time, or use a shortcut range, then load the report."}
 				</div>
 			) : (
 				<div style={{ overflowX: "auto" }}>
