@@ -9,6 +9,23 @@ export type RecentTransaction = {
   created_at: string;
 };
 
+export type AdminTransactionRow = RecentTransaction & {
+  sync_status: string | null;
+  sync_error: string | null;
+  synced_at: string | null;
+};
+
+export type PaginatedTransactionsResponse = {
+  success: boolean;
+  transactions: AdminTransactionRow[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+};
+
 export type TicketCounterRow = {
   facility_code: string;
   last_sequence: number;

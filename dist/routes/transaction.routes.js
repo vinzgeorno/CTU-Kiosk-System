@@ -301,6 +301,44 @@ async function transactionRoutes(fastify) {
             });
         }
     });
+    fastify.get("/transactions/all", async (request, reply) => {
+        const rawPage = request.query?.page;
+        const rawLimit = request.query?.limit;
+        const parsedPage = rawPage === undefined ? 1 : Number(rawPage);
+        const parsedLimit = rawLimit === undefined ? 50 : Number(rawLimit);
+        if (!Number.isFinite(parsedPage) || parsedPage < 1) {
+            return reply.status(400).send({
+                success: false,
+                message: "Invalid page",
+            });
+        }
+        if (!Number.isFinite(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) {
+            return reply.status(400).send({
+                success: false,
+                message: "Invalid limit (1-100)",
+            });
+        }
+        try {
+            const transactions = transactionRepository.getAllTransactionsPaginated(parsedPage, parsedLimit);
+            const total = transactionRepository.getTotalTransactionCount();
+            return {
+                success: true,
+                transactions,
+                pagination: {
+                    page: parsedPage,
+                    limit: parsedLimit,
+                    total,
+                    totalPages: Math.ceil(total / parsedLimit),
+                },
+            };
+        }
+        catch (error) {
+            return reply.status(400).send({
+                success: false,
+                message: error instanceof Error ? error.message : "Unknown error",
+            });
+        }
+    });
     fastify.get("/transactions/unsynced", async (request, reply) => {
         const status = typeof request.query?.status === "string" && request.query.status.trim() !== ""
             ? request.query.status.trim()

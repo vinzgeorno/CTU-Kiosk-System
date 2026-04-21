@@ -60,6 +60,17 @@ export async function getRecentTransactions(limit?: number) {
 	});
 }
 
+export async function getAllTransactions(page?: number, limit?: number) {
+	const params = new URLSearchParams();
+	if (typeof page === "number") params.append("page", page.toString());
+	if (typeof limit === "number") params.append("limit", limit.toString());
+	const query = params.toString() ? `?${params.toString()}` : "";
+
+	return requestJson(`/transactions/all${query}`, {
+		method: "GET",
+	});
+}
+
 export async function getTicketCounters() {
 	return requestJson("/ticket-counters", {
 		method: "GET",

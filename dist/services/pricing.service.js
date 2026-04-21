@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getPriceSelection = getPriceSelection;
-const facilities_1 = require("./src/config/facilities");
+const facilities_1 = require("../config/facilities");
 function getPriceSelection(facilityCode, categoryCode) {
     const facility = facilities_1.facilities.find((item) => item.code === facilityCode);
     if (!facility) {

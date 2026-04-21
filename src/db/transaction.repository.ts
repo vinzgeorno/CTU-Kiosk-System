@@ -170,6 +170,32 @@ export class TransactionRepository {
 		return statement.all(limit);
 	}
 
+	getAllTransactionsPaginated(page: number = 1, limit: number = 50) {
+		const offset = (page - 1) * limit;
+		const statement = this.database.prepare(
+			`
+				SELECT *
+				FROM transactions
+				ORDER BY id DESC
+				LIMIT ? OFFSET ?
+			`
+		);
+
+		return statement.all(limit, offset);
+	}
+
+	getTotalTransactionCount() {
+		const statement = this.database.prepare(
+			`
+				SELECT COUNT(*) as total
+				FROM transactions
+			`
+		);
+
+		const result = statement.get() as { total: number };
+		return result.total;
+	}
+
 	getTransactionById(id: number) {
 		const transactionStatement = this.database.prepare(
 			`

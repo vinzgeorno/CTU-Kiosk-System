@@ -1,4 +1,4 @@
-import { CategoryCode, FacilityCode, facilities } from "./src/config/facilities";
+import { CategoryCode, FacilityCode, facilities } from "../config/facilities";
 
 export type PriceSelectionResult = {
   facilityCode: FacilityCode;

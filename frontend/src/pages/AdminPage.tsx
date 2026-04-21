@@ -3,6 +3,7 @@ import { API_BASE_URL } from "../config";
 import { facilities } from "../data/facilities";
 import {
 	getRecentTransactions,
+	getAllTransactions,
 	getTicketCounters,
 	getTransactionByTicketLabel,
 	reprintTransactionById,
@@ -16,6 +17,8 @@ import type {
 	TicketCounterRow,
 	TransactionStats,
 	FacilitySummaryReportRow,
+	AdminTransactionRow,
+	PaginatedTransactionsResponse,
 } from "../types/admin";
 
 type AdminTab = "dashboard" | "transactions" | "counters" | "search" | "reports";
@@ -286,12 +289,6 @@ type DisplayTicketCounterRow = TicketCounterRow & {
 
 type TransactionSyncStatus = "synced" | "pending" | "failed";
 
-type AdminTransactionRow = RecentTransaction & {
-	sync_status?: string | null;
-	synced_at?: string | null;
-	sync_error?: string | null;
-};
-
 const normalizeSyncStatus = (value: unknown): TransactionSyncStatus => {
 	if (value === "synced" || value === "failed") {
 		return value;
@@ -402,6 +399,10 @@ const mergeCounterRows = (backendCounters: TicketCounterRow[]): DisplayTicketCou
 export default function AdminPage() {
 	const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
 	const [recentTransactions, setRecentTransactions] = useState<AdminTransactionRow[]>([]);
+	const [allTransactions, setAllTransactions] = useState<AdminTransactionRow[]>([]);
+	const [currentPage, setCurrentPage] = useState(1);
+	const [totalPages, setTotalPages] = useState(1);
+	const [totalTransactions, setTotalTransactions] = useState(0);
 	const [ticketCounters, setTicketCounters] = useState<DisplayTicketCounterRow[]>([]);
 	const [transactionStats, setTransactionStats] = useState<TransactionStats>(defaultStats);
 	const [isLoading, setIsLoading] = useState(false);
@@ -454,6 +455,17 @@ export default function AdminPage() {
 		);
 	};
 
+	const loadAllTransactionsData = async (page: number = 1) => {
+		const result = await getAllTransactions(page, 50);
+		const response = result as PaginatedTransactionsResponse;
+		if (response.success) {
+			setAllTransactions(response.transactions);
+			setCurrentPage(response.pagination.page);
+			setTotalPages(response.pagination.totalPages);
+			setTotalTransactions(response.pagination.total);
+		}
+	};
+
 	useEffect(() => {
 		const loadData = async () => {
 			setIsLoading(true);
@@ -483,6 +495,12 @@ export default function AdminPage() {
 
 		void loadData();
 	}, []);
+
+	useEffect(() => {
+		if (activeTab === "transactions") {
+			void loadAllTransactionsData(1);
+		}
+	}, [activeTab]);
 
 	const handleSearch = async () => {
 		const trimmed = ticketLabel.trim();
@@ -534,6 +552,18 @@ export default function AdminPage() {
 						: item
 				)
 			);
+			setAllTransactions((prev) =>
+				prev.map((item) =>
+					item.id === transaction.id
+						? {
+							...item,
+							sync_status: "synced",
+							sync_error: null,
+							synced_at: syncedAt,
+						}
+						: item
+				)
+			);
 			setFoundTransaction((prev) =>
 				prev && prev.id === transaction.id
 					? {
@@ -552,6 +582,17 @@ export default function AdminPage() {
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : "Failed to retry sync.";
 			setRecentTransactions((prev) =>
+				prev.map((item) =>
+					item.id === transaction.id
+						? {
+							...item,
+							sync_status: "failed",
+							sync_error: errorMessage,
+						}
+						: item
+				)
+			);
+			setAllTransactions((prev) =>
 				prev.map((item) =>
 					item.id === transaction.id
 						? {
@@ -809,10 +850,45 @@ export default function AdminPage() {
 		<section style={{ ...panelStyle, display: "grid", gap: 14 }}>
 			<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
 				<div>
-					<h2 style={{ margin: 0, fontSize: 22, color: "#0f172a" }}>Recent Transactions</h2>
+					<h2 style={{ margin: 0, fontSize: 22, color: "#0f172a" }}>All Transactions</h2>
 					<p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 14 }}>
-						Latest ticket activity and quick reprint access.
+						All ticket transactions with pagination. Showing {allTransactions.length} of {totalTransactions} transactions.
 					</p>
+				</div>
+				<div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+					<button
+						type="button"
+						onClick={() => loadAllTransactionsData(currentPage - 1)}
+						disabled={currentPage <= 1}
+						style={{
+							padding: "8px 12px",
+							borderRadius: 8,
+							border: "1px solid #d1d5db",
+							background: currentPage <= 1 ? "#f3f4f6" : "#ffffff",
+							color: currentPage <= 1 ? "#9ca3af" : "#374151",
+							cursor: currentPage <= 1 ? "not-allowed" : "pointer",
+						}}
+					>
+						Previous
+					</button>
+					<span style={{ fontSize: 14, color: "#6b7280" }}>
+						Page {currentPage} of {totalPages}
+					</span>
+					<button
+						type="button"
+						onClick={() => loadAllTransactionsData(currentPage + 1)}
+						disabled={currentPage >= totalPages}
+						style={{
+							padding: "8px 12px",
+							borderRadius: 8,
+							border: "1px solid #d1d5db",
+							background: currentPage >= totalPages ? "#f3f4f6" : "#ffffff",
+							color: currentPage >= totalPages ? "#9ca3af" : "#374151",
+							cursor: currentPage >= totalPages ? "not-allowed" : "pointer",
+						}}
+					>
+						Next
+					</button>
 				</div>
 			</div>
 
@@ -846,14 +922,14 @@ export default function AdminPage() {
 							</tr>
 						</thead>
 						<tbody>
-							{recentTransactions.length === 0 ? (
+							{allTransactions.length === 0 ? (
 								<tr>
 									<td style={{ padding: "14px 8px", color: "#64748b" }} colSpan={9}>
-										No recent transactions.
+										No transactions found.
 									</td>
 								</tr>
 							) : (
-								recentTransactions.map((transaction) => {
+								allTransactions.map((transaction) => {
 									const syncStatus = normalizeSyncStatus(transaction.sync_status);
 									const canRetrySync = syncStatus === "failed" || syncStatus === "pending";
 

@@ -10,7 +10,9 @@ const env_1 = require("../config/env");
 class SummaryReportPrinterService {
     constructor(pythonScriptPath) {
         const defaultScriptPath = path_1.default.join(__dirname, "print_summary_report.py");
-        this.scriptPath = pythonScriptPath ?? env_1.env.PRINT_SCRIPT_PATH ?? defaultScriptPath;
+        const configuredScriptPath = env_1.env.SUMMARY_PRINT_SCRIPT_PATH.trim();
+        this.scriptPath =
+            pythonScriptPath ?? (configuredScriptPath || defaultScriptPath);
     }
     async printReport(data) {
         return new Promise((resolve, reject) => {
