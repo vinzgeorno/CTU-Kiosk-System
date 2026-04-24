@@ -162,13 +162,12 @@ class TransactionRepository {
         const statement = this.database.prepare(`
 				SELECT
 					COUNT(*) AS totalTransactions,
-					COALESCE(SUM(amount_paid), 0) AS totalAmount,
+					COALESCE(SUM(amount_due), 0) AS totalAmount,
 					COALESCE(SUM(total_units), 0) AS totalUnits,
 					COALESCE(AVG(duration_ms), 0) AS averageDurationMs,
 					COALESCE(MIN(duration_ms), 0) AS fastestDurationMs,
 					COALESCE(MAX(duration_ms), 0) AS slowestDurationMs
 				FROM transactions
-				WHERE duration_ms IS NOT NULL
 			`);
         const stats = statement.get();
         if (!stats) {

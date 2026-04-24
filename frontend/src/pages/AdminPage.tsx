@@ -1456,6 +1456,33 @@ export default function AdminPage() {
 				fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
 			}}
 		>
+			<button
+				type="button"
+				aria-label="Back to welcome"
+				onClick={() => {
+					window.location.pathname = "/";
+				}}
+				style={{
+					position: "fixed",
+					top: 24,
+					left: 24,
+					zIndex: 12,
+					width: 48,
+					height: 48,
+					borderRadius: 12,
+					display: "inline-flex",
+					alignItems: "center",
+					justifyContent: "center",
+					background: "rgba(15,23,42,0.08)",
+					border: "1px solid rgba(15,23,42,0.12)",
+					cursor: "pointer",
+				}}
+			>
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+					<path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7z" stroke="#0f172a" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+					<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06A2 2 0 1 1 2.28 16.9l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09c.7 0 1.3-.4 1.51-1a1.65 1.65 0 0 0-.33-1.82L4.3 4.7A2 2 0 1 1 7.13 1.87l.06.06c.5.5 1.2.7 1.82.33.5-.3 1.1-.47 1.7-.47h.02c.6 0 1.2.17 1.7.47.62.37 1.32.17 1.82-.33l.06-.06A2 2 0 1 1 20.87 4.7l-.06.06a1.65 1.65 0 0 0-.33 1.82c.2.6.5 1 1 1.51H21a2 2 0 0 1 0 4h-.09c-.7 0-1.3.4-1.51 1z" stroke="#0f172a" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+				</svg>
+			</button>
 			<div style={{ maxWidth: 1240, margin: "0 auto", display: "grid", gap: 18 }}>
 				<header
 					style={{
